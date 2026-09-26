@@ -2,7 +2,8 @@ import { DAY, Intent, MINUTE } from "./domain";
 
 export const isExplanation = (text: string) => /\b(?:why|reason|resaon|cause|explain (?:that|this|the above)|what (?:led to|caused))\b/i.test(text);
 export const isCalculation = (text: string) => /\b(?:calculat\w*|how (?:did|do) you (?:get|work|arrive)|where (?:did|does).*(?:number|figure)|why.*\d+\s*(?:min\w*|hours?|times|×)|how (?:is|was) (?:that|this) (?:measured|worked out))\b/i.test(text);
-export const isFollowUp = (text: string) => isExplanation(text) || isCalculation(text) || /\b(?:that|above|previous (?:answer|conversation|chat)|earlier|tell me more|more detail|compare|timeline|evidence|patterns?|unusual|unnecessary|unnessary|abnormal|anything different)\b/i.test(text);
+export const isEvaluation = (text: string) => /^(?:(?:is|was|would|does)\s+(?:it|that|this)(?:\s+(?:be|seem|look))?\s+)?(?:a\s+)?(?:good|bad|okay|ok|normal|enough|too (?:much|little|long|short))(?:\s+(?:time|duration|amount|length|of (?:sleep|rest)))?[?!. ]*$/i.test(text.trim());
+export const isFollowUp = (text: string) => isEvaluation(text) || isExplanation(text) || isCalculation(text) || /\b(?:that|above|previous (?:answer|conversation|chat)|earlier|tell me more|more detail|compare|timeline|evidence|patterns?|unusual|unnecessary|unnessary|abnormal|anything different)\b/i.test(text);
 
 export function clarificationContext(message: string, proposed: Intent, previous?: Intent): Intent {
   const hasNewTime = /\b(?:today|yesterday|last|past|week|now|currently|\d{4}-\d{2}-\d{2})\b/i.test(message);
@@ -34,7 +35,7 @@ export function resolveIntent(message: string, anchor: string, previous?: Intent
   const explicitActivity = isToileting || isSleeping || isMeal || isShowering || isGrooming || isPacing || isEnvironment;
   const explicitTime = /\b(?:today|yesterday|last night|last|past|week|now|currently|\d{4}-\d{2}-\d{2})\b/i.test(text);
   if (previous && !overview && !explicitActivity && !explicitTime && isFollowUp(text)) {
-    return { ...previous, task: isCalculation(text) ? "calculation" : isExplanation(text) ? "explanation" : previous.task === "clarification" ? previous.activities.length ? "activity" : "overview" : previous.task, comparison: previous.comparison || /normal|usual|compar|pattern|unnecessary|unnessary/.test(text), pattern: previous.pattern || /pattern|repeat|consecutive/.test(text) };
+    return { ...previous, task: isCalculation(text) ? "calculation" : isExplanation(text) ? "explanation" : previous.task === "clarification" ? previous.activities.length ? "activity" : "overview" : previous.task, comparison: previous.comparison || isEvaluation(text) || /normal|usual|compar|pattern|unnecessary|unnessary/.test(text), pattern: previous.pattern || /pattern|repeat|consecutive/.test(text) };
   }
 
   const behavioral = !overview && ((!isToileting && !isSleeping && !isMeal && !isShowering && !isGrooming &&

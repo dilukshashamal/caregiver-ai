@@ -61,3 +61,9 @@ Cloud checks require real credentials: apply `supabase/schema.sql`, run the seed
 - 43 tests, lint, and TypeScript checks pass. Regression coverage includes yesterday → meals → misspelled pattern → correction, topic/date switching, and recovery after a clarification.
 - The running API retained the September 20 interval across all four messages. Pattern and correction answers used only meal events and meal baselines and disclosed the single-day pattern limitation. All four responses were factual fallback; live model wording remains unverified under the exhausted configured budgets.
 - Clarifications now retain the last activity scope rather than replacing it with an empty topic. Pattern follow-ups set comparison and pattern analysis in both local and inherited model plans.
+
+## Sleep-duration evaluation follow-up — September 26, 2026
+
+- 44 tests, lint, and TypeScript checks pass. Short evaluative follow-ups retain sleep scope and date, enable baseline comparison, and distinguish measured duration from sleep quality or adequacy. With no prior context, the assistant requests context. Explicit unrelated-topic and emergency boundaries still apply.
+- The exact sleep-yesterday → is-it-good-time sequence passed against the local API. The follow-up cited only the sleep record and baseline, comparing 450 with 436.07 minutes and stating the limitation. Both replies used factual fallback; live LLM wording is not verified.
+- The generic lexical relevance check no longer rejects a context-bearing turn before the model planner sees it.

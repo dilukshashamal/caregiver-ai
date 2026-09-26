@@ -75,7 +75,9 @@ export function safetyResponse(text: string, hasPreviousContext = false): { mess
   // 6. Caregiving Context Guardrail: Queries completely lacking any caregiving, activity, or health relevance
   const hasCareContext = /\b(?:dad|mum|mom|he|him|his|she|her|they|them|person|patient|resident|father|mother|parent|loved\s+one|ordonez|sleep\w*|slept|nap\w*|rest\w*|wake\w*|waking|bed\w*|toilet\w*|bathroom\w*|restroom\w*|pee\w*|poop\w*|urinat\w*|eat\w*|meal\w*|breakfast\w*|lunch\w*|dinner\w*|snack\w*|food\w*|drink\w*|shower\w*|bath\w*|wash\w*|groom\w*|hygiene|pace\w*|pacing|wander\w*|walk\w*|vocal\w*|shout\w*|call\w*|voice\w*|noise\w*|transition\w*|movement|moving|agitat\w*|escalat\w*|calm\w*|distress\w*|crisis|episode\w*|behavior\w*|activity|activities|event\w*|routine\w*|schedule\w*|seat\w*|today|yesterday|morning|afternoon|evening|night|day\w*|week\w*|minute\w*|hour\w*|usual|normal|baseline|change\w*|different\w*|compar\w*|trend\w*|pattern\w*|frequent\w*|often|doing|summary|overview|update|evidence|timeline|record\w*|log\w*|sensor\w*|observation\w*|status|how\s+was|how\s+did|how\s+is|is\s+he|is\s+she|is\s+dad|did\s+he|did\s+she|was\s+that|is\s+that|care\w*|nurse\w*|naai|gennaai)\b/i.test(trimmed);
 
-  if (!hasCareContext && !/\b(?:behaviour\w*|unbehaviour\w*)\b/i.test(trimmed) && !(hasPreviousContext && isFollowUp(trimmed))) {
+  // A lexical relevance check must not block the contextual model planner.
+  // Explicit emergency, medical, security and unrelated-topic checks still run above.
+  if (!hasCareContext && !/\b(?:behaviour\w*|unbehaviour\w*)\b/i.test(trimmed) && !hasPreviousContext) {
     if (isFollowUp(trimmed)) return { message: "Which recorded change would you like me to explain? Ask about sleep, daily routine, or a behavioral change so I can find the relevant evidence.", flag: "CONTEXT_REQUIRED" };
     return {
       message: "I am NAAI, your caregiving assistant for everyday care. I can help explain your loved one's recorded activities, sleep, meals, bathroom visits, and behavioral observations. How can I help with their care today?",

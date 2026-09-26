@@ -76,6 +76,9 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
         const pattern = consecutiveShift(counts, baseline.mean_frequency);
         text += Object.keys(counts).length < 3 ? " This interval is too short to assess a multi-day pattern." : pattern.detected ? ` Recorded frequency differed from baseline for ${Math.max(pattern.increased, pattern.decreased)} consecutive calendar days (at least 25% ${pattern.increased >= pattern.decreased ? "higher" : "lower"}).` : " No sustained frequency shift was found in the complete recorded days examined; missing annotations still limit this comparison.";
       }
+      if (intent.comparison && activity === "Sleeping") {
+        text += " Recorded sleep duration alone cannot establish sleep quality, whether the person felt rested, or whether that amount was sufficient for them.";
+      }
       add(text, selected, intent.comparison || intent.pattern ? baseline : undefined);
     }
   }

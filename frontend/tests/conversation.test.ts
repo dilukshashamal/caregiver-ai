@@ -152,6 +152,30 @@ test("a clarification retains the last meal topic so a correction can recover it
   assert.ok(corrected.evidence.every(e => /Breakfast|Lunch|Dinner|Snack/.test(e.event_type)));
 });
 
+test("short duration evaluations refer to the prior sleep record and compare its baseline", async () => {
+  const sleep = await ask("did he sleep yesterday?");
+  const original = readMemory(sleep.conversation_id, "dad-demo")!;
+  for (const question of ["is it good time?", "is it a good time?", "is that enough?", "was it too short?", "too long?"]) {
+    const answer = await ask(question, sleep.conversation_id);
+    const memory = readMemory(answer.conversation_id, "dad-demo")!;
+    assert.deepEqual(memory.intent.activities, ["Sleeping"]);
+    assert.equal(memory.intent.start, original.intent.start);
+    assert.equal(memory.intent.end, original.intent.end);
+    assert.equal(memory.intent.comparison, true);
+    assert.match(answer.answer, /450 minutes/);
+    assert.match(answer.answer, /personal baseline/);
+    assert.match(answer.answer, /cannot establish sleep quality/);
+    assert.ok(answer.evidence.every(e => e.event_type.startsWith("Sleeping")));
+    assert.ok(!answer.safety_flags.includes("OUT_OF_SCOPE_REDIRECT"));
+  }
+  const noContext = await ask("is it good time?");
+  assert.ok(noContext.safety_flags.includes("CONTEXT_REQUIRED"));
+  assert.deepEqual(noContext.evidence, []);
+  assert.equal(safetyResponse("could you put that another way", true), null);
+  assert.equal(safetyResponse("what is the weather", true)?.flag, "OUT_OF_SCOPE_REDIRECT");
+  assert.equal(safetyResponse("he is not breathing", true)?.flag, "EMERGENCY_REDIRECT");
+});
+
 test("thanks followed by a substantive request or emergency is not swallowed", async () => {
   const breakfast = await ask("breakfast normal?");
   const question = await ask("Thanks, how was his sleep last night?", breakfast.conversation_id);
