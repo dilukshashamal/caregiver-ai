@@ -50,3 +50,8 @@ Cloud checks require real credentials: apply `supabase/schema.sql`, run the seed
 - The live local environmental-definition request returned the correct local explanation with no event evidence. Its flags showed DETERMINISTIC_RESPONSE, so live LLM routing/composition is not verified in this run. Mocked provider tests verify both stages and context delivery.
 - Social replies now use the LLM when available and retain dialogue as well as prior evidence scope; earlier records describing social turns as model-free refer to the previous implementation.
 - Read-only budget inspection confirmed Gemini and Groq each used 50/50 configured daily calls on September 26. This explains the live fallback; budgets were not changed or reset.
+
+## Yesterday summary follow-up — September 26, 2026
+
+- 41 tests, lint, and TypeScript checks pass. Added the exact yesterday-to-summary sequence, clarification date retention, explicit today override, and model-planned overview inheritance after a focused activity.
+- The running local API returned recorded overviews for both messages, with identical recording-relative intervals (September 20 00:00 to September 21 00:00 UTC) and 12 supporting evidence records. Both used disclosed deterministic fallback; this was not live LLM verification.

@@ -63,7 +63,12 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
     const generated = flags.includes("LLM_COMPOSED");
     const answer: GroundedAnswer = { answer: text, claims: [], evidence: [], limitations: generated ? [] : ["AI interpretation or narration was unavailable; this is a local explanation or clarification."], data_coverage_summary: "N/A", abstained: false, safety_flags: [...flags, "CONVERSATIONAL_RESPONSE", ...(generated ? [] : ["DETERMINISTIC_RESPONSE"])], message_id: messageId };
     // Keep the last evidence scope while retaining the actual intervening dialogue.
-    answer.conversation_id = signContext(recipient.id, memory?.intent || intent, [...(memory?.turns || []), { question: input.message, answer: text }]);
+    let retainedIntent = memory?.intent || intent;
+    if (intent.task === "clarification") {
+      const reference = input.reference_time || await latestTime(recipient.id, signal) || new Date().toISOString();
+      retainedIntent = { ...resolveIntent(input.message, reference, previous), task: "clarification" };
+    }
+    answer.conversation_id = signContext(recipient.id, retainedIntent, [...(memory?.turns || []), { question: input.message, answer: text }]);
     emit("delta", { text }); emit("done", answer); return;
   }
   const latest = await latestTime(recipient.id, signal);
@@ -81,8 +86,8 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
       answer: "Would you like me to explain a term, summarize the day, or look at a particular recorded activity? For example, you can ask ‘What does environmental observation mean?’ or ‘Show environmental observations today’.",
       claims: [], evidence: [], limitations: [], data_coverage_summary: "N/A", abstained: false,
       safety_flags: [...flags, "CONVERSATIONAL_RESPONSE", "CLARIFICATION_REQUIRED"], message_id: messageId,
-      ...(memory ? { conversation_id: input.conversation_id } : {}),
     };
+    answer.conversation_id = signContext(recipient.id, { ...intent, task: "clarification" }, [...(memory?.turns || []), { question: input.message, answer: answer.answer }]);
     emit("delta", { text: answer.answer }); emit("done", answer); return;
   }
   const [events, baselines, history] = await Promise.all([

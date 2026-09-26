@@ -81,6 +81,41 @@ test("definitions and unresolved questions never fall back to the whole day's re
   assert.ok(unclear);
 });
 
+test("yesterday overview and short summary retain the requested calendar day without an LLM", async () => {
+  const yesterday = await ask("how is the yesterday?");
+  assert.ok(!yesterday.safety_flags.includes("CLARIFICATION_REQUIRED"));
+  const first = readMemory(yesterday.conversation_id, "dad-demo")!;
+  assert.equal(first.intent.task, "overview");
+  assert.equal(first.intent.start, "2026-09-20T00:00:00.000Z");
+  assert.equal(first.intent.end, "2026-09-21T00:00:00.000Z");
+  const summary = await ask("summary", yesterday.conversation_id);
+  const second = readMemory(summary.conversation_id, "dad-demo")!;
+  assert.equal(second.intent.start, first.intent.start);
+  assert.equal(second.intent.end, first.intent.end);
+  assert.ok(summary.evidence.length > 0);
+  assert.doesNotMatch(summary.answer, /Would you like me/);
+  for (const question of ["how was yesterday?", "what about yesterday?", "how is today?"]) {
+    assert.equal(resolveIntent(question, anchor).task, "overview");
+  }
+  const today = await ask("how is today?", summary.conversation_id);
+  assert.equal(readMemory(today.conversation_id, "dad-demo")?.intent.start, "2026-09-21T00:00:00.000Z");
+});
+
+test("clarification stores the unresolved day and the user's summary choice resolves it", async () => {
+  const unclear = await ask("observation thing yesterday");
+  assert.ok(unclear.safety_flags.includes("CLARIFICATION_REQUIRED"));
+  const memory = readMemory(unclear.conversation_id, "dad-demo")!;
+  assert.equal(memory.intent.task, "clarification");
+  assert.equal(memory.turns.at(-1)?.question, "observation thing yesterday");
+  const answer = await ask("summary", unclear.conversation_id);
+  const resolved = readMemory(answer.conversation_id, "dad-demo")!;
+  assert.equal(resolved.intent.task, "overview");
+  assert.equal(resolved.intent.start, memory.intent.start);
+  assert.equal(resolved.intent.end, memory.intent.end);
+  assert.ok(answer.evidence.length > 0);
+  assert.ok(!answer.safety_flags.includes("CLARIFICATION_REQUIRED"));
+});
+
 test("thanks followed by a substantive request or emergency is not swallowed", async () => {
   const breakfast = await ask("breakfast normal?");
   const question = await ask("Thanks, how was his sleep last night?", breakfast.conversation_id);
@@ -142,6 +177,11 @@ test("model planning cannot invent activities, recipient scope, or unsupported t
   const fallback = resolveIntent("daily overview", anchor);
   const plan = { task: "overview", activities: [], period: "day", comparison: true };
   assert.equal(validateQuestionPlan(JSON.stringify(plan), fallback).task, "overview");
+  const previous = { intent: resolveIntent("sleep yesterday", anchor), turns: [] };
+  const inherited = validateQuestionPlan(JSON.stringify({ ...plan, period: "inherit" }), fallback, previous);
+  assert.deepEqual(inherited.activities, []);
+  assert.equal(inherited.start, previous.intent.start);
+  assert.equal(inherited.end, previous.intent.end);
   for (const invalid of [{ ...plan, activities: ["Diagnosis"] }, { ...plan, recipient_id: "other" }, { ...plan, sql: "drop table events" }, { ...plan, period: "inherit" }]) {
     assert.throws(() => validateQuestionPlan(JSON.stringify(invalid), fallback));
   }

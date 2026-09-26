@@ -5,8 +5,15 @@ export const isCalculation = (text: string) => /\b(?:calculat\w*|how (?:did|do) 
 export const isFollowUp = (text: string) => isExplanation(text) || isCalculation(text) || /\b(?:that|above|previous answer|tell me more|more detail|compare|timeline|evidence)\b/i.test(text);
 
 export function resolveIntent(message: string, anchor: string, previous?: Intent): Intent {
-  const text = message.toLowerCase();
-  const overview = /\b(?:day.to.day|daily life|daily routine|overall|overview|whole day|routine summary|all (?:recorded )?activities|what (?:happened|did .+ do) today|how was .+ day)\b/i.test(text);
+  const text = message.toLowerCase().trim();
+  const summaryChoice = /^(?:(?:a|the|please|give me a|show me a)\s+)?(?:summary|summari[sz]e|overview|daily summary|summari[sz]e (?:it|that|the day))(?:\s+please)?[.!?]*$/i.test(text);
+  const dayQuestion = /^(?:how (?:is|was|were)(?: the| things)?|what (?:about|happened))\s+(?:yesterday|today)[?!. ]*$/i.test(text);
+  const overview = summaryChoice || dayQuestion || /\b(?:day.to.day|daily life|daily routine|overall|overview|whole day|routine summary|all (?:recorded )?activities|what (?:happened|did .+ do) (?:today|yesterday)|how was .+ day)\b/i.test(text);
+  // Selecting the summary offered in a clarification changes the type of answer,
+  // not the day the caregiver was already asking about.
+  if (summaryChoice && previous && previous.task !== "conversation") {
+    return { ...previous, task: "overview", activities: [], behavioral: false, comparison: true, pattern: false, coverage: false };
+  }
   const isEnvironment = /\benvironment(?:al)?[ _-]?(?:observations?|data|sensors?)\b/i.test(text);
   const isToileting = /\b(?:toilet\w*|bathroom\w*|restroom\w*|pee\w*|poop\w*|urinat\w*)\b/i.test(text);
   const isSleeping = /\b(?:sleep\w*|slept|rest|resting|nap\w*|bedtime|waking)\b/i.test(text);
