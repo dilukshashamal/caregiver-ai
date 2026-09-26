@@ -4,7 +4,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 
 export const metadata: Metadata = {
   icons: { icon: "/brand/nurse-assist.png" },
-  title: "NurseAssist AI | Your care space",
+  title: "NAAI | Your care space",
   description: "A helping hand for everyday care. Understand your loved one’s sleep, meals, and daily routines with GENNAAI.",
 };
 

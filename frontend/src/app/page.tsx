@@ -80,7 +80,7 @@ export default function Home() {
           <Image src="/brand/gennaai.png" alt="GENNAAI" width={158} height={40} className="brand-wordmark" priority />
         </a>
         <span className="header-divider" />
-        <span className="header-product">NurseAssist<span>AI</span></span>
+        <span className="header-product">NA<span>AI</span></span>
         <span className="header-context"><Heart size={15} aria-hidden="true" /> Your caregiving space</span>
       </header>
       <div className="workspace-layout">
@@ -91,14 +91,14 @@ export default function Home() {
             onRetry={() => { void refetch(); }} onSelectRecipient={id => { resetConversation(); setSelectedRecipientId(id); }} />
           <div className="sidebar-section">
             <span className="eyebrow">YOUR CONVERSATION</span>
-            <div className="current-section"><MessageCircle size={18} aria-hidden="true" /><span>Ask NurseAssist</span><span className="active-dot" /></div>
+            <div className="current-section"><MessageCircle size={18} aria-hidden="true" /><span>Ask NAAI</span><span className="active-dot" /></div>
             <button className="new-conversation" onClick={resetConversation} disabled={!messages.length || chatMutation.isPending}><Plus size={17} aria-hidden="true" /> Start a new conversation</button>
           </div>
           <div className="sidebar-note"><div className="note-icon"><Heart size={20} aria-hidden="true" /></div><h2>You know them best.</h2><p>We help you understand their day, so you can focus on being there.</p><a href="https://www.gennaai.com/" target="_blank" rel="noreferrer">Our approach to care <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a></div>
           <div className="sidebar-footer"><span className="brand-spark">✳</span><span>Built around people.<br /><strong>Always.</strong></span></div>
         </aside>
         <main id="care-conversation" className="conversation-workspace" tabIndex={-1}>
-          <div className="conversation-header"><div><span className="section-icon"><MessageCircle size={18} aria-hidden="true" /></span><h2>Ask NurseAssist</h2></div><span className="conversation-purpose"><Sparkles size={14} aria-hidden="true" /> Everyday care, made clearer</span></div>
+          <div className="conversation-header"><div><span className="section-icon"><MessageCircle size={18} aria-hidden="true" /></span><h2>Ask NAAI</h2></div><span className="conversation-purpose"><Sparkles size={14} aria-hidden="true" /> Everyday care, made clearer</span></div>
           <ChatStream messages={messages} isPending={chatMutation.isPending}
             onRetry={() => { const last = messages.filter(m => m.role === "caregiver").at(-1); if (last) handleSendMessage(last.content); }}
             onInspectEvidence={(evidence, claim) => { setInspectedEvidence(evidence); setInspectedClaimText(claim || null); setIsDrawerOpen(true); }}

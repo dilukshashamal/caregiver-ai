@@ -24,13 +24,13 @@ export function ChatStream({ messages, isPending, onInspectEvidence, welcomeQues
       {welcomeQuestions}
       <p className="welcome-footnote"><Check size={14} aria-hidden="true" /> Answers you can explore, with the activities behind them.</p>
     </div>}
-    <div className="message-list" role="log" aria-label="Conversation with NurseAssist" aria-live="polite" aria-relevant="additions" aria-busy={isPending}>
+    <div className="message-list" role="log" aria-label="Conversation with NAAI" aria-live="polite" aria-relevant="additions" aria-busy={isPending}>
       {messages.map((msg, index) => {
         const caregiver = msg.role === "caregiver";
         const answer = msg.groundedAnswer;
         return <article key={msg.id} className={`message ${caregiver ? "message-caregiver" : "message-assistant"}`}>
           {!caregiver && <Image className="message-avatar" src="/brand/nurse-assist.png" alt="" width={34} height={34} />}
-          <div className="message-body"><span className="message-author">{caregiver ? "You" : "NurseAssist"}</span>
+          <div className="message-body"><span className="message-author">{caregiver ? "You" : "NAAI"}</span>
             <div className={`message-content ${msg.isError ? "message-error" : ""}`}>
               {answer && <div className="answer-status">{answer.abstained ? <><Info size={14} aria-hidden="true" /><span>{answer.safety_flags.includes("UNSUPPORTED_MEDICAL_REDIRECT") ? "A healthcare professional can help with this" : "There isn’t enough information to answer this fully"}</span></> : <><Check size={14} aria-hidden="true" /><span>Based on recorded activities</span></>}</div>}
               <p className="answer-text">{msg.content}</p>

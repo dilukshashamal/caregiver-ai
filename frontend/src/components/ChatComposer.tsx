@@ -17,7 +17,7 @@ export function ChatComposer({ onSendMessage, isPending, disabled, inputRef }: {
   }, [input, inputRef]);
   return <div className="composer-area">
     <form onSubmit={submit} className="composer-form">
-      <label className="sr-only" htmlFor="care-question">Your question for NurseAssist</label>
+      <label className="sr-only" htmlFor="care-question">Your question for NAAI</label>
       <textarea id="care-question" ref={inputRef} rows={1} value={input} onChange={e => setInput(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
         placeholder={disabled ? "Choose a care profile to begin…" : "Ask about their day…"}
