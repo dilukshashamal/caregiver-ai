@@ -1,0 +1,128 @@
+# GENNAAI · standalone caregiver app
+
+A Next.js application with the original [pilot-caregiver](https://github.com/dilukshashamal/pilot-caregiver) interface, internal streaming API routes, Supabase PostgreSQL/pgvector, and selectable Gemini or Groq assistance. No Python service, Redis, SQLite, Docker, or local database is required.
+
+For the exact GitHub → Supabase → Vercel setup, see [Deploy to Vercel](docs/DEPLOY_VERCEL.md).
+
+## Run immediately
+
+Requires Node.js 22 LTS and npm.
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. The bundled mode needs no credentials. Choose **Dad · synthetic demo**, then ask **“Is Dad becoming agitated?”**. Select **View related activities** for the chronological evidence and baseline summaries. **More about this answer** contains individual claim citations, including the comparison with previous episodes. Switching to Mum clears the conversation and uses a separate, stable sample.
+
+The existing layout, branding, styles, composer, evidence drawer, recipient selector, and chat component are preserved. Only the page's asynchronous message state and API transport changed to support incremental responses. The interface deliberately retains the reference's NurseAssist branding.
+
+## Your environment file
+
+`frontend/.env` has been created locally with placeholders and is ignored by Git. For a fresh checkout:
+
+```sh
+cp .env.example frontend/.env
+```
+
+Edit these values:
+
+```dotenv
+DEMO_MODE=true
+DATA_SOURCE=supabase
+NEXT_PUBLIC_SUPABASE_URL=https://qvnmtgtqtktuqrmmhqtq.supabase.co
+SUPABASE_URL=https://qvnmtgtqtktuqrmmhqtq.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-side-service-role-key
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+The service-role and Gemini keys must never have a `NEXT_PUBLIC_` prefix. Next.js automatically reads `frontend/.env`; `.env.local` and deployment environment variables take precedence. The seed script also reads these files. Never paste real secrets into source files.
+
+Your optional direct database connection is included as:
+
+```text
+postgresql://postgres:[YOUR-PASSWORD]@db.qvnmtgtqtktuqrmmhqtq.supabase.co:5432/postgres
+```
+
+Host: `db.qvnmtgtqtktuqrmmhqtq.supabase.co`; port: `5432`; database/user: `postgres`. Percent-encode special characters in the **password only**, for example `@` becomes `%40`. `DATABASE_URL` is for external database tools; the application and seed script use the HTTPS Supabase API, so there are no serverless PostgreSQL connection pools to manage. A database password is not a substitute for the service-role API key.
+
+## Initialize Supabase
+
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in your project's SQL Editor. It creates the tables, vector index, scoped search RPC, private access table, row-level security, and atomic provider budgets. It does not delete existing rows.
+2. Fill in `frontend/.env` with the real service-role key and optional Gemini key.
+3. From `frontend/`, run:
+
+```sh
+npm run seed:dry
+npm run seed -- --skip-embeddings
+# Optional: adds/resumes real Gemini embeddings, reusing unchanged narratives.
+npm run seed
+```
+
+The public entrypoint is `scripts/seed_supabase.ts`, also runnable with `npx tsx scripts/seed_supabase.ts` from the repository root. `npm run seed` uses the locally installed, locked version of tsx.
+
+4. Set `DATA_SOURCE=supabase` and restart the app. Four sample recipients become available: Dad, Mum, Ordonez A, and Ordonez B. A database error is reported as an error; it never silently substitutes the bundled dataset.
+
+The seed dry run produces **1,202 events, 37 baselines, and 39 compact narratives**. It reports three invalid Ordonez A rows (72, 81, 83: reversed timestamps). Raw data is preserved byte-for-byte. Baselines use sample standard deviation, zero-count calendar days, and the first 65% of each Ordonez recording span. Synthetic baselines use a separate 14-day training period. UTC is the explicit timestamp convention for these sample imports.
+
+Embedding generation is checkpointed per narrative and throttled to one call every 16 seconds; a complete first seed takes roughly ten minutes. A quota or provider error stops embedding generation without undoing structured data; rerun later to resume. `--skip-embeddings` makes zero Gemini calls.
+
+## Sample scenario
+
+All Dad/Mum data is explicitly synthetic; it is not attributed to the UCI recordings.
+
+| Observation, 18:00–18:22 UTC on September 21, 2026 | Dad | Baseline, September 1–14 |
+| --- | ---: | ---: |
+| Pacing duration | 12.4 minutes | 4 minutes |
+| Bedroom/living-room transitions | 9 | 3 |
+| Vocal activity duration | 6 minutes | 2 minutes |
+
+Pacing is **3.1×** baseline. September 16 and 19 contain similar sample episodes, followed by recorded seated activity. Similarity requires all three metrics to be within 25% of the current window. Environmental observations supply context. This is a demonstration of observed trajectories, not an emotion detector or crisis prediction model. “Today” and “last night” are relative to the latest recording, and every answer states its actual interval.
+
+## Provider selection, cost and grounding controls
+
+The original `LLM_PROVIDER`, `GROQ_API_KEY`, and `GROQ_MODEL` settings are supported through a shared TypeScript `LLMProvider` interface. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` to use Groq; `GROQ_MODEL` defaults to the original `llama-3.3-70b-versatile`. Set `LLM_PROVIDER=gemini` to use Gemini. `LLM_FALLBACK_PROVIDER=groq` or `gemini` explicitly enables one secondary provider; it defaults to `none`. Both providers share the same grounding gate. Each has separate `*_REQUESTS_PER_MINUTE` and `*_REQUESTS_PER_DAY` limits.
+
+Gemini remains the embedding provider. Groq-only operation needs no Gemini key and uses structured retrieval; supplying a Gemini key adds semantic narrative ranking. Rerun the updated schema if you applied it before Groq was added.
+
+- Default model: `gemini-2.5-flash-lite`; configurable through `GEMINI_MODEL`.
+- At most one 1536-dimensional query embedding and one streaming call per configured synthesis provider per question. A secondary provider is attempted only if explicitly configured and the primary is unavailable. Gemini embeddings are normalized before cosine search.
+- No raw audio, video, full event histories, or conversation transcripts are sent to either provider. Retrieval and all arithmetic run locally in TypeScript against scoped records.
+- The model streams **IDs of approved evidence-backed sentences**, not unrestricted prose. Each ID is validated before its exact sentence is streamed into the chat. This intentionally favors factual accuracy over free-form wording.
+- Up to eight claims and 192 output tokens per synthesis call. Query text is limited to 1,000 characters.
+- Atomic Supabase counters default to **4 requests/minute and 50/day per provider**, shared across serverless instances. Gemini seeding and chat share its budget. These are conservative application budgets, not promises of provider quotas.
+- No key, exhausted budget, malformed provider output, provider error, or embedding failure leaves deterministic evidence-backed answers available. Built-in demo mode never calls a cloud provider, even if a key is present, because it has no persistent budget store.
+- Model streams have a 12-second timeout; embeddings have a 5-second timeout. The chat request has an overall 48-second deadline and a 60-second function configuration.
+
+See Google's [embedding guidance](https://ai.google.dev/gemini-api/docs/embeddings), [model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite), and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) for your project's current availability and quotas.
+
+## Deploy to Vercel
+
+1. Import this repository into Vercel.
+2. Set **Root Directory: `frontend`**, framework **Next.js**, Node.js **22.x**. Keep the normal `npm run build` and `.next` output settings.
+3. For a no-key demo, set `DATA_SOURCE=demo`, `DEMO_MODE=true` (these are also the defaults).
+4. For Supabase operation, set the environment variables above in Vercel, apply the schema, and seed **before** enabling `DATA_SOURCE=supabase`. `.env` is intentionally not committed or uploaded.
+5. Deploy. No backend URL, background worker, scheduled task, Python runtime, or persistent filesystem is used.
+
+The two API handlers are Node.js serverless functions. [`frontend/vercel.json`](frontend/vercel.json) sets chat duration to 60 seconds. Check [Vercel's current function limits](https://vercel.com/docs/functions/limitations). Hobby eligibility is subject to [Vercel's personal/non-commercial usage rules](https://vercel.com/docs/plans/hobby); a commercial product launch may require a different plan. Bundled UCI data also has a non-commercial restriction in [`data/raw/README.txt`](data/raw/README.txt).
+
+## Access boundaries
+
+`DEMO_MODE=true` exposes only the four known public sample IDs, and only when the Supabase recipient has `is_demo=true`. Never add personal health records to those sample profiles. Tables and RPCs are inaccessible to browser/anonymous database keys.
+
+With `DEMO_MODE=false`, the API requires a Supabase Auth bearer token and checks `recipient_access` before any recipient query. The preserved reference interface has no login screen; a private deployment requires adding your authentication UI/session integration and passing its bearer token. This repository's ready-to-run interface is the public sample experience, not a complete authenticated clinical product.
+
+## Verify
+
+```sh
+cd frontend
+npm run lint
+npm test
+npm run seed:dry
+npm run build
+```
+
+Tests cover calculations, ingestion, date windows, sample isolation, safety, exact citations, signed context, malformed requests, SSE chunk boundaries, streamed route completion, normalized embeddings, and mocked Supabase authorization. Live Supabase/Gemini verification requires your keys; no live cloud schema or deployment is created by local build/test commands.
+
+Details: [source audit](docs/SOURCE_AUDIT.md), [architecture](docs/ARCHITECTURE.md), [safety](docs/SAFETY.md), [verification](docs/TEST_PLAN.md).

@@ -1,0 +1,40 @@
+{
+  "name": "gennaai-conversational-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src scripts tests --max-warnings=0",
+    "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
+    "seed": "tsx ../scripts/seed_supabase.ts",
+    "seed:dry": "tsx ../scripts/seed_supabase.ts --dry-run"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.56.2",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.441.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "server-only": "^0.0.1",
+    "next": "^15.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.2"
+  },
+  "overrides": { "next": { "postcss": "^8.5.23" } },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.0",
+    "tsx": "^4.20.5",
+    "dotenv": "^16.6.1",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.11",
+    "typescript": "^5.6.2"
+  }
+}
