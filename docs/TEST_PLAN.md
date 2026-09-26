@@ -55,3 +55,9 @@ Cloud checks require real credentials: apply `supabase/schema.sql`, run the seed
 
 - 41 tests, lint, and TypeScript checks pass. Added the exact yesterday-to-summary sequence, clarification date retention, explicit today override, and model-planned overview inheritance after a focused activity.
 - The running local API returned recorded overviews for both messages, with identical recording-relative intervals (September 20 00:00 to September 21 00:00 UTC) and 12 supporting evidence records. Both used disclosed deterministic fallback; this was not live LLM verification.
+
+## Meal-pattern memory follow-up — September 26, 2026
+
+- 43 tests, lint, and TypeScript checks pass. Regression coverage includes yesterday → meals → misspelled pattern → correction, topic/date switching, and recovery after a clarification.
+- The running API retained the September 20 interval across all four messages. Pattern and correction answers used only meal events and meal baselines and disclosed the single-day pattern limitation. All four responses were factual fallback; live model wording remains unverified under the exhausted configured budgets.
+- Clarifications now retain the last activity scope rather than replacing it with an empty topic. Pattern follow-ups set comparison and pattern analysis in both local and inherited model plans.

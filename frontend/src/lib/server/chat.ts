@@ -5,7 +5,7 @@ import { DAY, Recipient } from "./domain";
 import { answerFromPlan, buildConversationPlan, validatePlan } from "./evidence";
 import { embed } from "./gemini";
 import { configuredProviders } from "./providers/llm-provider";
-import { resolveIntent } from "./intent";
+import { clarificationContext, resolveIntent } from "./intent";
 import { getBaselines, getEvents, latestTime, reserveBudget, usesDatabase } from "./repository";
 import { safetyResponse } from "./safety";
 import { readMemory, signContext } from "./session";
@@ -66,7 +66,7 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
     let retainedIntent = memory?.intent || intent;
     if (intent.task === "clarification") {
       const reference = input.reference_time || await latestTime(recipient.id, signal) || new Date().toISOString();
-      retainedIntent = { ...resolveIntent(input.message, reference, previous), task: "clarification" };
+      retainedIntent = clarificationContext(input.message, resolveIntent(input.message, reference, previous), previous);
     }
     answer.conversation_id = signContext(recipient.id, retainedIntent, [...(memory?.turns || []), { question: input.message, answer: text }]);
     emit("delta", { text }); emit("done", answer); return;
@@ -87,7 +87,7 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
       claims: [], evidence: [], limitations: [], data_coverage_summary: "N/A", abstained: false,
       safety_flags: [...flags, "CONVERSATIONAL_RESPONSE", "CLARIFICATION_REQUIRED"], message_id: messageId,
     };
-    answer.conversation_id = signContext(recipient.id, { ...intent, task: "clarification" }, [...(memory?.turns || []), { question: input.message, answer: answer.answer }]);
+    answer.conversation_id = signContext(recipient.id, clarificationContext(input.message, intent, previous), [...(memory?.turns || []), { question: input.message, answer: answer.answer }]);
     emit("delta", { text: answer.answer }); emit("done", answer); return;
   }
   const [events, baselines, history] = await Promise.all([

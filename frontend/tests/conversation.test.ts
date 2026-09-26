@@ -116,6 +116,42 @@ test("clarification stores the unresolved day and the user's summary choice reso
   assert.ok(!answer.safety_flags.includes("CLARIFICATION_REQUIRED"));
 });
 
+test("yesterday → meals → misspelled pattern → correction preserves meal scope and dates", async () => {
+  let answer = await ask("how is the yesterday?");
+  answer = await ask("what about meals?", answer.conversation_id);
+  const meals = readMemory(answer.conversation_id, "dad-demo")!;
+  assert.deepEqual(meals.intent.activities, ["Breakfast", "Lunch", "Dinner", "Snack"]);
+  for (const question of ["is there any unnessary pattern?", "no i ask related above conversation?"]) {
+    answer = await ask(question, answer.conversation_id);
+    const memory = readMemory(answer.conversation_id, "dad-demo")!;
+    assert.deepEqual(memory.intent.activities, meals.intent.activities);
+    assert.equal(memory.intent.start, meals.intent.start);
+    assert.equal(memory.intent.end, meals.intent.end);
+    assert.equal(memory.intent.pattern, true);
+    assert.equal(memory.intent.comparison, true);
+    assert.match(answer.answer, /too short to assess a multi-day pattern/);
+    assert.ok(answer.evidence.every(e => /Breakfast|Lunch|Dinner|Snack/.test(e.event_type)));
+    assert.ok(!answer.safety_flags.includes("CLARIFICATION_REQUIRED"));
+    assert.equal(memory.turns.at(-1)?.question, question);
+  }
+  const sleep = await ask("what about sleep today?", answer.conversation_id);
+  const switched = readMemory(sleep.conversation_id, "dad-demo")!;
+  assert.deepEqual(switched.intent.activities, ["Sleeping"]);
+  assert.notEqual(switched.intent.start, meals.intent.start);
+});
+
+test("a clarification retains the last meal topic so a correction can recover it", async () => {
+  const meals = await ask("meals yesterday");
+  const unclear = await ask("observation thing please", meals.conversation_id);
+  assert.ok(unclear.safety_flags.includes("CLARIFICATION_REQUIRED"));
+  const retained = readMemory(unclear.conversation_id, "dad-demo")!;
+  assert.deepEqual(retained.intent.activities, ["Breakfast", "Lunch", "Dinner", "Snack"]);
+  const corrected = await ask("no i ask related above conversation?", unclear.conversation_id);
+  assert.ok(!corrected.safety_flags.includes("CLARIFICATION_REQUIRED"));
+  assert.match(corrected.answer, /breakfast/);
+  assert.ok(corrected.evidence.every(e => /Breakfast|Lunch|Dinner|Snack/.test(e.event_type)));
+});
+
 test("thanks followed by a substantive request or emergency is not swallowed", async () => {
   const breakfast = await ask("breakfast normal?");
   const question = await ask("Thanks, how was his sleep last night?", breakfast.conversation_id);
