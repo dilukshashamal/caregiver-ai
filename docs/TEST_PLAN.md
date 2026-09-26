@@ -43,3 +43,10 @@ Cloud checks require real credentials: apply `supabase/schema.sql`, run the seed
 - Browser: Dad shows 3.1× pacing and two prior sample episodes; baseline statistics and timestamps render in the existing drawer; Escape closes it; switching to Mum clears the chat and returns 1× pacing.
 - At 390 × 844, document width is 390 pixels: no horizontal overflow. Screenshots are in ignored `output/playwright/`.
 - Hash comparison confirms `ChatComposer`, `ChatStream`, `EvidenceDrawer`, `RecipientSelector`, and `globals.css` are unchanged from the reference. The page JSX is unchanged.
+
+## LLM routing follow-up — September 26, 2026
+
+- 39 tests pass, including model routing/composition of a contextual label paraphrase, no activity retrieval for definitions, scoped environmental event requests, and clarification when scope is unresolved. Lint, TypeScript, and production build pass.
+- The live local environmental-definition request returned the correct local explanation with no event evidence. Its flags showed DETERMINISTIC_RESPONSE, so live LLM routing/composition is not verified in this run. Mocked provider tests verify both stages and context delivery.
+- Social replies now use the LLM when available and retain dialogue as well as prior evidence scope; earlier records describing social turns as model-free refer to the previous implementation.
+- Read-only budget inspection confirmed Gemini and Groq each used 50/50 configured daily calls on September 26. This explains the live fallback; budgets were not changed or reset.

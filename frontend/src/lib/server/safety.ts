@@ -1,4 +1,5 @@
 import { isFollowUp } from "./intent";
+import { explainConcept } from "./concepts";
 
 export function safetyResponse(text: string, hasPreviousContext = false): { message: string; flag: string } | null {
   const trimmed = text.trim();
@@ -54,6 +55,9 @@ export function safetyResponse(text: string, hasPreviousContext = false): { mess
       flag: "CONVERSATIONAL_RESPONSE"
     };
   }
+
+  const definition = explainConcept(trimmed);
+  if (definition) return { message: definition, flag: "CONVERSATIONAL_RESPONSE" };
 
   // Social-only turns are intentionally local: no records or model quota required.
   if (/^(?:(?:ok|okay|alright|great|got it)[,! .]*)?(?:thanks(?: a lot)?|thank you(?: so much)?|thx|thankyou)[!. ]*$/i.test(trimmed) || /^(?:ok|okay|got it|understood|bye|goodbye)[!. ]*$/i.test(trimmed)) {

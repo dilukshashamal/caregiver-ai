@@ -38,7 +38,7 @@ export interface Recipient {
 }
 export interface Dataset { recipients: Recipient[]; events: ActivityEvent[]; baselines: Baseline[] }
 export interface Intent {
-  task?: "activity" | "overview" | "explanation" | "calculation";
+  task?: "activity" | "overview" | "explanation" | "calculation" | "conversation" | "clarification";
   activities: string[];
   start: string;
   end: string;

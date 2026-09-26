@@ -17,8 +17,10 @@ Reviewed September 26, 2026. The assistant speaks to a family caregiver. It must
 | “Why did you get 20 minutes?” | Explain the timestamps and elapsed interval; this is a calculation question, not a request for a medical cause. |
 | “Why is he behaving like that?” | Refer to the prior observations, distinguish correlation from cause, and ask at most one useful context question. |
 | “Tell me about his day” | Summarize the relevant routines and changes in plain language. Avoid dumping every event. |
-| “Thanks” | Acknowledge warmly, preserve the last evidence context, and make no database or model calls. |
+| “Thanks” | Acknowledge warmly, preserve the last evidence context, and compose a brief model response when quota is available. |
 | An emergency or request for a diagnosis | Apply the corresponding safety response before retrieval or generation. |
+
+The LLM first classifies each in-scope question using bounded recent dialogue: recorded activity, overview, explanation, calculation, general conversation, or clarification. Definitions use curated product knowledge instead of recipient events. The model then composes the reply; SQL and computations remain server-owned. Unknown activity scope falls back to clarification instead of an all-activity report. Both stages consume the existing provider budgets. Local definitions and rules are availability fallbacks, not the primary interpretation path.
 
 The LLM composes original prose from the question, three bounded recent exchanges, and at most twelve server-computed facts. It does not merely select canned sentences. The prompt applies across activities and recipients; the breakfast example is a regression case, not a fixed response template.
 

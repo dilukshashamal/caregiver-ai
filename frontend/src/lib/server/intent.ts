@@ -6,7 +6,8 @@ export const isFollowUp = (text: string) => isExplanation(text) || isCalculation
 
 export function resolveIntent(message: string, anchor: string, previous?: Intent): Intent {
   const text = message.toLowerCase();
-  const overview = /\b(?:day.to.day|daily life|daily routine|overall|overview|whole day|routine summary)\b/i.test(text);
+  const overview = /\b(?:day.to.day|daily life|daily routine|overall|overview|whole day|routine summary|all (?:recorded )?activities|what (?:happened|did .+ do) today|how was .+ day)\b/i.test(text);
+  const isEnvironment = /\benvironment(?:al)?[ _-]?(?:observations?|data|sensors?)\b/i.test(text);
   const isToileting = /\b(?:toilet\w*|bathroom\w*|restroom\w*|pee\w*|poop\w*|urinat\w*)\b/i.test(text);
   const isSleeping = /\b(?:sleep\w*|slept|rest|resting|nap\w*|bedtime|waking)\b/i.test(text);
   const isMeal = /\b(?:meal\w*|eat\w*|breakfast\w*|lunch\w*|dinner\w*|snack\w*|food)\b/i.test(text);
@@ -15,7 +16,7 @@ export function resolveIntent(message: string, anchor: string, previous?: Intent
   const isPacing = /\b(?:pacing|wander\w*|walking)\b/i.test(text);
   const isSituationOrAnomaly = /\b(?:situation|status|how (?:is|are) (?:the situation|things|everything|he|she|dad|mum|mom)|any(?:thing)? (?:special|unusual|abnormal|different|wrong|concerning|out of the ordinary)|notice(?: anything)?|special thing|is (?:it|everything|he|she|dad|mum|mom) normal)\b/i.test(text);
   const isNowOrRecent = /\b(?:now|right now|currently|at the moment|latest|recent)\b/i.test(text);
-  const explicitActivity = isToileting || isSleeping || isMeal || isShowering || isGrooming || isPacing;
+  const explicitActivity = isToileting || isSleeping || isMeal || isShowering || isGrooming || isPacing || isEnvironment;
   const explicitTime = /\b(?:today|yesterday|last night|last|past|week|now|currently|\d{4}-\d{2}-\d{2})\b/i.test(text);
   if (previous && !overview && !explicitActivity && !explicitTime && isFollowUp(text)) {
     return { ...previous, task: isCalculation(text) ? "calculation" : isExplanation(text) ? "explanation" : previous.task, comparison: previous.comparison || /normal|usual|compar/.test(text) };
@@ -30,6 +31,8 @@ export function resolveIntent(message: string, anchor: string, previous?: Intent
   let activities: string[] = [];
   if (overview) {
     activities = [];
+  } else if (isEnvironment) {
+    activities = ["Environmental_observation"];
   } else if (isToileting) {
     activities = ["Toileting"];
   } else if (isSleeping) {

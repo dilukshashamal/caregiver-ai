@@ -5,7 +5,7 @@ flowchart LR
   UI[Preserved React UI] --> API[Next.js Route Handlers]
   API --> Auth[Recipient authorization and safety]
   Auth --> M[Verify recipient-scoped conversation memory]
-  M --> P[Resolve question and bounded optional model planner]
+  M --> P[Resolve question and bounded model planner]
   P --> R[Scoped repository]
   R --> DB[(Supabase PostgreSQL + pgvector)]
   R --> Demo[Bundled synthetic sample]
@@ -36,11 +36,11 @@ Baseline records use deterministic IDs including the training window; seeding ig
 
 ## Budget, context, and failure handling
 
-The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each planning, embedding and generation request reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Groq has independent counters and does not require Gemini credentials. Provider configuration uses `LLM_PROVIDER`, model settings and an explicit optional `LLM_FALLBACK_PROVIDER`. Social turns cost no model calls; clear factual questions normally need one composition call.
+The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each planning, embedding and generation request reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Groq has independent counters and does not require Gemini credentials. Provider configuration uses `LLM_PROVIDER`, model settings and an explicit optional `LLM_FALLBACK_PROVIDER`. In-scope turns normally use one planning call and one composition call, including social replies and definitions. Definitions use product knowledge without retrieving activity events.
 
 The signed follow-up token contains recipient, resolved intent, the last three bounded question/answer excerpts, and a one-hour expiry. It is signed, not encrypted, and does not grant recipient access. Set a stable random `SESSION_SECRET` on every deployment; absent that, database mode uses the private connection string as signing material and bundled mode uses an ephemeral random key. Rotating either key invalidates prior tokens. Tokens are checked for size, expiry, tampering and recipient binding. This is short-term conversational memory, not durable cross-device history.
 
-The workflow is safety → memory → intent planning → scoped retrieval → deterministic comparisons → LLM composition → validation → SSE delivery → memory update. Explicit daily overviews reset inherited activity filters. Named meals select only that meal. Referential questions reuse their earlier time and activity scope; duration explanations receive server-computed timestamp calculations. Ambiguous questions can invoke a five-second JSON planner restricted to allowed activities and periods. The model cannot choose recipient IDs or SQL. Overview retrieval combines daily routines with a separate matched recent behavioral window. Safety and social replies preserve the last valid evidence context. Read [response design](RESPONSE_DESIGN.md) for the researched communication principles and validation limits.
+The workflow is safety → memory → intent planning → scoped retrieval → deterministic comparisons → LLM composition → validation → SSE delivery → memory update. Explicit daily overviews reset inherited activity filters. Named meals select only that meal. Referential questions reuse their earlier time and activity scope; duration explanations receive server-computed timestamp calculations. Each in-scope turn invokes a five-second JSON planner restricted to allowed tasks, activities, and periods; local rules are the fallback. The model cannot choose recipient IDs or SQL. Overview retrieval combines daily routines with a separate matched recent behavioral window. Safety and social replies preserve the last valid evidence context. Read [response design](RESPONSE_DESIGN.md) for the researched communication principles and validation limits.
 
 Provider failure returns exact deterministic claims. Database failure returns an error. Inputs, queries, evidence packaging, output tokens, provider timeouts, and the total request duration are bounded. Network cancellation propagates from the browser to upstream requests.
 
