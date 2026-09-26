@@ -10,6 +10,7 @@ import { getBaselines, getEvents, latestTime, reserveBudget, usesDatabase } from
 import { safetyResponse } from "./safety";
 import { readMemory, signContext } from "./session";
 import { planQuestion } from "./planner";
+import { generateNarrative, narrativeClaims, NarrativeRejection } from "./narrative";
 
 export interface ChatInput { recipient_id: string; message: string; conversation_id?: string; reference_time?: string }
 export type Emit = (event: string, payload: unknown) => void;
@@ -18,7 +19,8 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
   const boundary = safetyResponse(input.message, !!memory);
   const messageId = crypto.randomUUID();
   if (boundary) {
-    const answer: GroundedAnswer = { answer: boundary.message, claims: [], evidence: [], limitations: [], data_coverage_summary: "N/A", abstained: true, safety_flags: [boundary.flag], message_id: messageId };
+    const social = ["CONVERSATIONAL_RESPONSE", "GREETING_RESPONSE"].includes(boundary.flag);
+    const answer: GroundedAnswer = { answer: boundary.message, claims: [], evidence: [], limitations: [], data_coverage_summary: "N/A", abstained: !social, safety_flags: [boundary.flag], message_id: messageId };
     if (memory) answer.conversation_id = input.conversation_id;
     emit("delta", { text: answer.answer }); emit("done", answer); return;
   }
@@ -58,34 +60,29 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
   const answer = answerFromPlan(plan);
   answer.message_id = messageId;
   answer.safety_flags = flags;
-  emit("evidence", { evidence: plan.evidence, claims: plan.claims });
-  emit("delta", { text: plan.intro });
-  const sent = new Set<number>();
-  const textParts = [plan.intro];
-  const sendClaim = async (id: number) => {
-    if (sent.has(id)) return;
-    sent.add(id);
-    const text = plan.claims[id].claim_text;
-    textParts.push(text);
-    const tokens = (`\n\n${text}`).match(/\s*\S+\s*/g) || [];
-    for (let i = 0; i < tokens.length; i += 5) {
-      if (signal.aborted) throw new Error("Request cancelled");
-      emit("delta", { text: tokens.slice(i, i + 5).join("") });
-      await new Promise<void>(resolve => setTimeout(resolve, 8));
-    }
-  };
   let generated = false;
+  let repairUsed = false;
   if (plan.claims.length) {
+    emit("status", { state: "composing" });
     const providers = configuredProviders();
     for (const provider of providers) {
       if (!await reserveBudget(signal, provider.provider_name)) continue;
       try {
-        const context = JSON.stringify({ current_question: input.message, recent_conversation: memory?.turns || [], resolved_intent: intent, instruction: "Answer the current question using current evidence; conversation history is context, not evidence." });
-        // Validate the complete selection before emitting it; a failed provider must
-        // not leave a partially accepted answer mixed with its fallback.
-        const selection: number[] = [];
-        for await (const id of provider.streamClaimIds(context, plan.claims, AbortSignal.any([signal, AbortSignal.timeout(12000)]))) selection.push(id);
-        for (const id of selection) await sendClaim(id);
+        // Let the model compose language, then check references, numeric consistency,
+        // and unsafe assertions before any generated text reaches the caregiver.
+        let narrative;
+        try { narrative = await generateNarrative(provider, input.message, intent, plan, memory, AbortSignal.any([signal, AbortSignal.timeout(12000)])); }
+        catch (error) {
+          if (!(error instanceof NarrativeRejection) || repairUsed || !await reserveBudget(signal, provider.provider_name)) throw error;
+          repairUsed = true;
+          narrative = await generateNarrative(provider, input.message, intent, plan, memory, AbortSignal.any([signal, AbortSignal.timeout(8000)]), error);
+          answer.safety_flags.push("NARRATIVE_REPAIRED");
+        }
+        answer.claims = narrativeClaims(narrative, plan);
+        answer.answer = `${recipient.metadata.synthetic ? "Synthetic demonstration. " : ""}${narrative.paragraphs.map(p => p.text).join("\n\n")}`;
+        const used = new Set(answer.claims.flatMap(c => c.evidence_ids));
+        answer.evidence = plan.evidence.filter(e => used.has(e.evidence_id));
+        answer.safety_flags.push("LLM_COMPOSED");
         generated = true;
         if (provider !== providers[0]) answer.safety_flags.push("SECONDARY_PROVIDER_USED");
         break;
@@ -93,15 +90,22 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
         answer.safety_flags.push("GROUNDED_FALLBACK");
         const status = error instanceof Error ? error.message.match(/^Generation provider status (\d{3})$/)?.[1] : undefined;
         answer.safety_flags.push(`${provider.provider_name.toUpperCase()}_${status ? `STATUS_${status}` : "UNAVAILABLE"}`);
+        if (error instanceof Error && /^(?:Unsupported narrative (?:number|unit|timestamp|format|comparison)|Invalid narrative (?:shape|length|citation)|Unsafe narrative assertion|Incomplete narrative)$/.test(error.message)) answer.safety_flags.push(error.message.toUpperCase().replaceAll(" ", "_"));
       }
     }
   }
   if (!generated) {
     answer.safety_flags.push("DETERMINISTIC_RESPONSE");
-    for (let i = 0; i < plan.claims.length; i++) await sendClaim(i);
+    if (plan.claims.length) answer.limitations.unshift("AI narration was unavailable for this response; the answer uses computed activity facts.");
   }
-  answer.answer = textParts.join("\n\n");
-  answer.claims = [...sent].map(id => plan.claims[id]);
+  emit("evidence", { evidence: answer.evidence, claims: answer.claims });
+  // Keep the existing SSE contract. Do not expose unvalidated partial model prose
+  // or add artificial per-token delays to a metered serverless invocation.
+  const chunks = answer.answer.match(/\s*\S+\s*/g) || [];
+  for (let i = 0; i < chunks.length; i += 5) {
+    if (signal.aborted) throw new Error("Request cancelled");
+    emit("delta", { text: chunks.slice(i, i + 5).join("") });
+  }
   answer.conversation_id = signContext(recipient.id, intent, [...(memory?.turns || []), { question: input.message, answer: answer.answer }]);
   emit("done", answer);
 }

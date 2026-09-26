@@ -57,7 +57,12 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
     } else {
       const duration = total >= 60 ? `${Math.floor(total / 60)} hours${total % 60 ? ` ${round(total % 60)} minutes` : ""} (${total} minutes)` : `${total} minutes`;
       let text = `${selected.length} ${label(activity)} event${selected.length === 1 ? " was" : "s were"} recorded, totaling ${duration} within the requested interval.`;
-      if (intent.comparison && baseline && !baseline.metadata.comparison_window) text += ` Mean whole-event duration was ${round(mean(selected.map(e => e.duration_minutes)))} minutes versus a baseline of ${baseline.mean_duration} minutes per event. This comparison alone cannot establish whether the routine is normal or healthy.`;
+      if (intent.comparison && baseline && !baseline.metadata.comparison_window) {
+        const observedMean = round(mean(selected.map(e => e.duration_minutes)));
+        text += ` Mean whole-event duration was ${observedMean} minutes versus a personal baseline of ${baseline.mean_duration} minutes per event.`;
+        if (observedMean === baseline.mean_duration) text += " The recorded duration matches their usual average; this is a duration comparison, not an assessment of overall health.";
+        else text += ` The mean duration is ${round(Math.abs(observedMean - baseline.mean_duration))} minutes ${observedMean < baseline.mean_duration ? "below" : "above"} the baseline; the values do not match exactly.`;
+      }
       if (intent.comparison && baseline && intent.start.endsWith("T00:00:00.000Z") && intent.end.endsWith("T00:00:00.000Z")) {
         const days = (Date.parse(intent.end) - Date.parse(intent.start)) / DAY;
         const frequency = selected.filter(e => e.start_time >= intent.start).length / days;
@@ -69,7 +74,7 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
         const lastFullDay = Math.floor(Date.parse(intent.end) / DAY) * DAY - 1;
         const counts = dailyCounts(selected, new Date(firstFullDay).toISOString(), new Date(lastFullDay).toISOString());
         const pattern = consecutiveShift(counts, baseline.mean_frequency);
-        text += pattern.detected ? ` Recorded frequency differed from baseline for ${Math.max(pattern.increased, pattern.decreased)} consecutive calendar days (at least 25% ${pattern.increased >= pattern.decreased ? "higher" : "lower"}).` : " The available records do not establish a shift lasting at least 3 consecutive calendar days.";
+        text += Object.keys(counts).length < 3 ? " This interval is too short to assess a multi-day pattern." : pattern.detected ? ` Recorded frequency differed from baseline for ${Math.max(pattern.increased, pattern.decreased)} consecutive calendar days (at least 25% ${pattern.increased >= pattern.decreased ? "higher" : "lower"}).` : " No sustained frequency shift was found in the complete recorded days examined; missing annotations still limit this comparison.";
       }
       add(text, selected, intent.comparison || intent.pattern ? baseline : undefined);
     }
@@ -98,6 +103,16 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
 export function buildConversationPlan(recipient: Recipient, intent: Intent, events: ActivityEvent[], baselines: Baseline[], history: ActivityEvent[], preferredIds: string[] = []): AnswerPlan {
   const broad = intent.task === "overview" || (intent.task === "explanation" && !intent.activities.length);
   let plan = buildAnswerPlan(recipient, intent, events, baselines, history, preferredIds);
+  if (intent.task === "calculation") {
+    const records = events.filter(e => e.recipient_id === recipient.id && e.start_time < intent.end && e.end_time > intent.start && (!intent.activities.length || intent.activities.includes(e.activity))).sort((a, b) => b.start_time.localeCompare(a.start_time));
+    const calculations = records.slice(0, 3).map(e => {
+      const start = Math.max(Date.parse(e.start_time), Date.parse(intent.start));
+      const end = Math.min(Date.parse(e.end_time), Date.parse(intent.end));
+      const minutes = round((end - start) / MINUTE);
+      return { claim_text: `The ${label(e.activity)} record on ${new Date(start).toISOString().slice(0, 10)} runs from ${new Date(start).toISOString().slice(11, 16)} to ${new Date(end).toISOString().slice(11, 16)} UTC within the requested interval. End time minus start time gives ${minutes} minutes. This measures the recorded activity interval, not continuous engagement or the reason for its length.`, evidence_ids: [e.id] };
+    });
+    plan = { ...plan, intro: recipient.metadata.synthetic ? "Synthetic demonstration." : "Here is how that duration was calculated.", claims: [...calculations, ...plan.claims].slice(0, 8), evidence: [...new Map([...records.slice(0, 3).map(eventEvidence), ...plan.evidence].map(e => [e.evidence_id, e])).values()] };
+  }
   if (broad && events.length) {
     const behavioralActivities = ["Pacing", "Room_transitions", "Vocal_activity", "Environmental_observation"];
     const routines = events.filter(e => !behavioralActivities.includes(e.activity));

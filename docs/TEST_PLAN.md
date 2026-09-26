@@ -16,7 +16,18 @@ Browser checks: submit the Dad agitation question; watch partial response update
 
 Cloud checks require real credentials: apply `supabase/schema.sql`, run the seed, rerun to confirm idempotence, inspect vector dimensions/RPC recipient filtering, verify anonymous table/RPC calls fail, and test provider budget exhaustion. Without credentials, mocked provider/authorization tests do not constitute live integration verification.
 
-## Conversation and direct-database verification — September 26, 2026
+## LLM composition verification — September 26, 2026
+
+- Final lint, TypeScript (`--incremental false`), and isolated production build passed.
+- 35 automated tests passed, covering new model-written prose, memory, calculation explanations, social replies, both generation providers, safety, numeric/unit/time/citation rejection, and provider failure fallback.
+- Live synthetic breakfast → “why 20min?” → thanks passed. Groq composed the first two responses; the calculation used the actual 08:00–08:20 UTC timestamps. Thanks made no LLM request and retained context.
+- A broader live check exposed generated use of retrieval-boundary timestamps as if they were observations. Removing those timestamps from the composition prompt fixed the single sleep check; the consistency gate rejected the earlier outputs before display.
+- Later overview checks exposed unsupported interpretations and numeric paraphrases. Added comparison checks, broader quantity parsing, unsafe-reassurance rejection, and one budgeted corrective generation. These pass mocked regression tests; final broader live LLM verification was limited by provider budget availability. Deterministic fallback still completed the conversation.
+- Use `npm run check:chat -- --breakfast --require-llm` to require live composition; without that flag the smoke check also accepts disclosed factual fallback.
+- The prior exact-sentence selection transport was removed. Tests now verify that model wording differs from fact sentences while citations map back to the corresponding records.
+- The only UI change is the social-response status caption (“Here to help”); layouts, styles, and interaction controls remain unchanged.
+
+## Earlier conversation and direct-database verification — September 26, 2026
 
 - 25 automated tests passed; lint and TypeScript checks passed.
 - Production build passed using `NEXT_DIST_DIR=.next-production` to avoid the active dev server's output directory.

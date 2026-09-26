@@ -10,8 +10,8 @@ flowchart LR
   R --> DB[(Supabase PostgreSQL + pgvector)]
   R --> Demo[Bundled synthetic sample]
   R --> A[Deterministic analytics and evidence]
-  A --> G[Optional Gemini or Groq sentence selection]
-  G --> V[Exact claim ID validation]
+  A --> G[Gemini or Groq natural explanation]
+  G --> V[Citation and numeric consistency checks]
   A --> V
   V --> SSE[SSE delta + final grounded answer]
   SSE --> UI
@@ -36,11 +36,11 @@ Baseline records use deterministic IDs including the training window; seeding ig
 
 ## Budget, context, and failure handling
 
-The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each embedding and generation reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Seeding honors Gemini's budget. Groq generation has independent counters and does not require Gemini credentials. `LLMProvider` exposes `provider_name`, `model_name`, and `streamClaimIds`; the orchestrator selects implementations using `LLM_PROVIDER` and an explicit optional `LLM_FALLBACK_PROVIDER`.
+The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each planning, embedding and generation request reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Groq has independent counters and does not require Gemini credentials. Provider configuration uses `LLM_PROVIDER`, model settings and an explicit optional `LLM_FALLBACK_PROVIDER`. Social turns cost no model calls; clear factual questions normally need one composition call.
 
 The signed follow-up token contains recipient, resolved intent, the last three bounded question/answer excerpts, and a one-hour expiry. It is signed, not encrypted, and does not grant recipient access. Set a stable random `SESSION_SECRET` on every deployment; absent that, database mode uses the private connection string as signing material and bundled mode uses an ephemeral random key. Rotating either key invalidates prior tokens. Tokens are checked for size, expiry, tampering and recipient binding. This is short-term conversational memory, not durable cross-device history.
 
-The workflow is safety → memory → intent planning → scoped retrieval → deterministic comparisons → model fact selection → validation → streaming → memory update. Explicit daily overviews reset inherited activity filters. Referential questions reuse their earlier time and activity scope. Ambiguous questions can invoke a five-second JSON planner, restricted to allowed activities and periods; the planner cannot choose recipient IDs or SQL. Overview retrieval combines daily routines with a separate matched recent behavioral window. Explanations distinguish the observed comparison from an unknown cause. Safety redirects preserve the last valid evidence context.
+The workflow is safety → memory → intent planning → scoped retrieval → deterministic comparisons → LLM composition → validation → SSE delivery → memory update. Explicit daily overviews reset inherited activity filters. Named meals select only that meal. Referential questions reuse their earlier time and activity scope; duration explanations receive server-computed timestamp calculations. Ambiguous questions can invoke a five-second JSON planner restricted to allowed activities and periods. The model cannot choose recipient IDs or SQL. Overview retrieval combines daily routines with a separate matched recent behavioral window. Safety and social replies preserve the last valid evidence context. Read [response design](RESPONSE_DESIGN.md) for the researched communication principles and validation limits.
 
 Provider failure returns exact deterministic claims. Database failure returns an error. Inputs, queries, evidence packaging, output tokens, provider timeouts, and the total request duration are bounded. Network cancellation propagates from the browser to upstream requests.
 

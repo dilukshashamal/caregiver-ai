@@ -32,7 +32,7 @@ export function readMemory(value: string | undefined, recipient: string): Conver
     const start = Date.parse(intent.start), end = Date.parse(intent.end);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 31 * 86400000) return;
     if (["behavioral", "comparison", "pattern", "coverage"].some(k => typeof intent[k] !== "boolean")) return;
-    if (intent.task !== undefined && !["activity", "overview", "explanation"].includes(intent.task)) return;
+    if (intent.task !== undefined && !["activity", "overview", "explanation", "calculation"].includes(intent.task)) return;
     const turns = parsed.turns ?? [];
     if (!Array.isArray(turns) || turns.length > 3 || turns.some(t => !t || typeof t.question !== "string" || t.question.length > 400 || typeof t.answer !== "string" || t.answer.length > 1000)) return;
     return { intent, turns };

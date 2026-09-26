@@ -1,5 +1,3 @@
-import type { GroundedClaim } from "../../types";
-import { streamClaimIds } from "../gemini";
 import { GroqProvider } from "./groq-provider";
 
 export type ProviderName = "gemini" | "groq";
@@ -7,12 +5,10 @@ export type ProviderName = "gemini" | "groq";
 export interface LLMProvider {
   readonly provider_name: ProviderName;
   readonly model_name: string;
-  streamClaimIds(message: string, claims: GroundedClaim[], signal: AbortSignal): AsyncGenerator<number>;
 }
 export class GeminiProvider implements LLMProvider {
   readonly provider_name = "gemini" as const;
   get model_name() { return process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"; }
-  streamClaimIds = streamClaimIds;
 }
 function makeProvider(name: string): LLMProvider {
   if (name === "gemini") return new GeminiProvider();

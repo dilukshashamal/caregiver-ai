@@ -45,6 +45,11 @@ export function safetyResponse(text: string, hasPreviousContext = false): { mess
     };
   }
 
+  // Social-only turns are intentionally local: no records or model quota required.
+  if (/^(?:(?:ok|okay|alright|great|got it)[,! .]*)?(?:thanks(?: a lot)?|thank you(?: so much)?|thx|thankyou)[!. ]*$/i.test(trimmed) || /^(?:ok|okay|got it|understood|bye|goodbye)[!. ]*$/i.test(trimmed)) {
+    return { message: /bye/i.test(trimmed) ? "Take care. I’m here when you need help." : "You’re welcome. I’m here if you need anything else.", flag: "CONVERSATIONAL_RESPONSE" };
+  }
+
   // 5. Friendly Nurse Assistant Greeting
   if (/^(?:hi|hello|hey|good (?:morning|afternoon|evening))\b[!.? ]*$/i.test(trimmed)) {
     return {

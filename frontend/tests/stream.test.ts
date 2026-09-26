@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readSSE } from "../src/lib/sse";
-import { embed, streamClaimIds } from "../src/lib/server/gemini";
+import { embed } from "../src/lib/server/gemini";
 
 function bytes(text: string, stride = 1) {
   const encoded = new TextEncoder().encode(text);
@@ -16,16 +16,6 @@ test("SSE drops incomplete frames", async () => {
   const result = [];
   for await (const frame of readSSE(bytes('event: done\ndata: {}'))) result.push(frame);
   assert.equal(result.length, 0);
-});
-test("Gemini returns only verified selections and rejects an invented claim", async () => {
-  const original = global.fetch;
-  const frame = (text: string) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\n\n`;
-  try {
-    global.fetch = async () => new Response(bytes(frame('{"claim_id":') + frame('0}\n{"claim_id":9}\n')));
-    const received: number[] = [];
-    await assert.rejects(async () => { for await (const id of streamClaimIds("test", [{ claim_text: "Recorded pacing.", evidence_ids: ["id"] }], AbortSignal.timeout(1000))) received.push(id); }, /Ungrounded/);
-    assert.deepEqual(received, [0]);
-  } finally { global.fetch = original; }
 });
 test("1536-dimensional Gemini vectors are normalized; malformed vectors fail", async () => {
   const original = global.fetch;

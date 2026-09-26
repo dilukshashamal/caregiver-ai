@@ -24,6 +24,33 @@ async function ask(message: string, conversation_id?: string, recipientIndex = 0
   return answer;
 }
 
+test("breakfast scope, calculation follow-up and thanks remain coherent without a provider", async () => {
+  const breakfast = await ask("is it normal breakfast pattern?");
+  assert.deepEqual(readMemory(breakfast.conversation_id, "dad-demo")?.intent.activities, ["Breakfast"]);
+  assert.match(breakfast.answer, /matches their usual average/);
+  assert.match(breakfast.answer, /too short to assess a multi-day pattern/);
+  assert.ok(breakfast.evidence.every(e => /Breakfast/.test(e.event_type)));
+  const calculation = await ask("why this is get 20min?", breakfast.conversation_id);
+  assert.match(calculation.answer, /08:00 to 08:20 UTC/);
+  assert.match(calculation.answer, /End time minus start time gives 20 minutes/);
+  assert.doesNotMatch(calculation.answer, /emotional state|diagnosis|routine or surroundings/);
+  const thanks = await ask("okay thanks", calculation.conversation_id);
+  assert.equal(thanks.abstained, false);
+  assert.match(thanks.answer, /welcome/);
+  assert.deepEqual(thanks.claims, []); assert.deepEqual(thanks.evidence, []);
+  assert.equal(thanks.conversation_id, calculation.conversation_id);
+  const later = await ask("how did you calculate that?", thanks.conversation_id);
+  assert.match(later.answer, /08:00 to 08:20/);
+});
+
+test("thanks followed by a substantive request or emergency is not swallowed", async () => {
+  const breakfast = await ask("breakfast normal?");
+  const question = await ask("Thanks, how was his sleep last night?", breakfast.conversation_id);
+  assert.match(question.answer, /420 minutes/);
+  const emergency = await ask("okay thanks, Dad is not breathing", breakfast.conversation_id);
+  assert.ok(emergency.safety_flags.includes("EMERGENCY_REDIRECT"));
+});
+
 test("reported sleep → daily overview → misspelled reason → behaviour follow-up sequence", async () => {
   const sleep = await ask("How long did they sleep last night?");
   assert.match(sleep.answer, /7 hours \(420 minutes\)/);
