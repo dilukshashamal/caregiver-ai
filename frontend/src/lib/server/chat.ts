@@ -1,12 +1,12 @@
 import "server-only";
-import { getSupabase } from "../supabase";
+import { query } from "../db";
 import { GroundedAnswer } from "../types";
 import { DAY, Recipient } from "./domain";
 import { answerFromPlan, buildAnswerPlan, validatePlan } from "./evidence";
 import { embed } from "./gemini";
 import { configuredProviders } from "./providers/llm-provider";
 import { resolveIntent } from "./intent";
-import { getBaselines, getEvents, latestTime, reserveBudget, usesSupabase } from "./repository";
+import { getBaselines, getEvents, latestTime, reserveBudget, usesDatabase } from "./repository";
 import { safetyResponse } from "./safety";
 import { readContext, signContext } from "./session";
 
@@ -31,12 +31,12 @@ export async function processChat(input: ChatInput, recipient: Recipient, emit: 
   const flags: string[] = [];
   let preferredIds: string[] = [];
   // Vectors rank narratives; exact relational records remain the source for every metric.
-  if (usesSupabase() && process.env.GEMINI_API_KEY && await reserveBudget(signal)) {
+  if (usesDatabase() && process.env.GEMINI_API_KEY && await reserveBudget(signal)) {
     try {
       const queryEmbedding = await embed(input.message, AbortSignal.any([signal, AbortSignal.timeout(5000)]));
-      const { data, error } = await getSupabase(signal).rpc("match_activity_embeddings", { query_embedding: queryEmbedding, match_threshold: 0.3, match_count: 4, filter_recipient_id: recipient.id });
-      if (error) throw error;
-      preferredIds = (data || []).filter((row: { recipient_id: string }) => row.recipient_id === recipient.id).flatMap((row: { metadata: { event_ids?: string[] } }) => row.metadata.event_ids || []).slice(0, 32);
+      const vector = `[${queryEmbedding.join(",")}]`;
+      const data = await query<{ recipient_id: string; metadata: { event_ids?: string[] } }>("select recipient_id, metadata from public.match_activity_embeddings($1::vector, $2::float, $3::int, $4::text)", [vector, 0.3, 4, recipient.id], signal);
+      preferredIds = data.filter(row => row.recipient_id === recipient.id).flatMap(row => row.metadata?.event_ids || []).slice(0, 32);
     } catch { flags.push("SEMANTIC_SEARCH_UNAVAILABLE"); }
   }
   const plan = buildAnswerPlan(recipient, intent, events, baselines, history, preferredIds);

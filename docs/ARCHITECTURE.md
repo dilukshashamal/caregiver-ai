@@ -26,9 +26,9 @@ flowchart LR
 
 ## Database and source selection
 
-`DATA_SOURCE=demo` uses only bundled synthetic records. `DATA_SOURCE=supabase` uses only Supabase; errors never silently fall back to a different dataset. Real server-role keys stay on the server. All record reads include recipient filters. Authorization restricts demo IDs or verifies a Supabase user and membership before retrieval.
+`DATA_SOURCE=demo` uses only bundled synthetic records. `DATA_SOURCE=database` uses only the direct PostgreSQL connection; errors never silently fall back to a different dataset. `DATABASE_URL` stays on the server. All record reads include recipient filters. Demo mode restricts reads to fixed sample IDs.
 
-The schema extends the requested core tables with baseline time windows, sample counts, metadata, explicit demo designation, authorization memberships, and two budget rows per provider. HNSW uses cosine distance on 1536-dimensional normalized Gemini vectors. RPCs run as invoker and are granted only to the service role. Tables have RLS and no browser grants.
+The schema extends the requested core tables with baseline time windows, sample counts, metadata, explicit demo designation, and two budget rows per provider. HNSW uses cosine distance on 1536-dimensional normalized Gemini vectors. Route handlers use parameterized SQL through the direct PostgreSQL pool; the browser never connects to the database.
 
 Baseline records use deterministic IDs including the training window; seeding ignores duplicate baseline IDs so reruns preserve historical versions. A new training window creates a new version. New algorithms should use new versioned IDs rather than rewriting old baselines.
 
@@ -36,7 +36,7 @@ Baseline records use deterministic IDs including the training window; seeding ig
 
 The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each embedding and generation reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Seeding honors Gemini's budget. Groq generation has independent counters and does not require Gemini credentials. `LLMProvider` exposes `provider_name`, `model_name`, and `streamClaimIds`; the orchestrator selects implementations using `LLM_PROVIDER` and an explicit optional `LLM_FALLBACK_PROVIDER`.
 
-The signed follow-up token contains recipient, activity/time intent and a one-hour expiry. It contains no transcript and does not grant recipient access. Production sessions derive their signing key from `SESSION_SECRET` or the service-role key. The public bundled demo has a non-secret fallback signing key and remains restricted to fixed synthetic profiles.
+The signed follow-up token contains recipient, activity/time intent and a one-hour expiry. It contains no transcript and does not grant recipient access. Production sessions derive their signing key from `SESSION_SECRET`. The public bundled demo has a non-secret fallback signing key and remains restricted to fixed synthetic profiles.
 
 Provider failure returns exact deterministic claims. Database failure returns an error. Inputs, queries, evidence packaging, output tokens, provider timeouts, and the total request duration are bounded. Network cancellation propagates from the browser to upstream requests.
 

@@ -30,14 +30,12 @@ Edit these values:
 
 ```dotenv
 DEMO_MODE=true
-DATA_SOURCE=supabase
-NEXT_PUBLIC_SUPABASE_URL=https://qvnmtgtqtktuqrmmhqtq.supabase.co
-SUPABASE_URL=https://qvnmtgtqtktuqrmmhqtq.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-server-side-service-role-key
+DATA_SOURCE=database
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.qvnmtgtqtktuqrmmhqtq.supabase.co:5432/postgres
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
-The service-role and Gemini keys must never have a `NEXT_PUBLIC_` prefix. Next.js automatically reads `frontend/.env`; `.env.local` and deployment environment variables take precedence. The seed script also reads these files. Never paste real secrets into source files.
+The database password and Gemini key stay server-side. Next.js automatically reads `frontend/.env`; `.env.local` and deployment environment variables take precedence. The seed script also reads these files. Never paste real secrets into source files.
 
 Your optional direct database connection is included as:
 
@@ -45,12 +43,12 @@ Your optional direct database connection is included as:
 postgresql://postgres:[YOUR-PASSWORD]@db.qvnmtgtqtktuqrmmhqtq.supabase.co:5432/postgres
 ```
 
-Host: `db.qvnmtgtqtktuqrmmhqtq.supabase.co`; port: `5432`; database/user: `postgres`. Percent-encode special characters in the **password only**, for example `@` becomes `%40`. `DATABASE_URL` is for external database tools; the application and seed script use the HTTPS Supabase API, so there are no serverless PostgreSQL connection pools to manage. A database password is not a substitute for the service-role API key.
+Host: `db.qvnmtgtqtktuqrmmhqtq.supabase.co`; port: `5432`; database/user: `postgres`. Percent-encode special characters in the **password only**, for example `@` becomes `%40`. The application and seed script use this direct PostgreSQL connection with a single small pool per warm serverless instance.
 
 ## Initialize Supabase
 
-1. Run [`supabase/schema.sql`](supabase/schema.sql) in your project's SQL Editor. It creates the tables, vector index, scoped search RPC, private access table, row-level security, and atomic provider budgets. It does not delete existing rows.
-2. Fill in `frontend/.env` with the real service-role key and optional Gemini key.
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in your project's SQL Editor. It creates the tables, vector index, scoped search function, and atomic provider budgets. It does not delete existing rows.
+2. Fill in `frontend/.env` with `DATABASE_URL` and the optional Gemini key.
 3. From `frontend/`, run:
 
 ```sh
@@ -62,7 +60,7 @@ npm run seed
 
 The public entrypoint is `scripts/seed_supabase.ts`, also runnable with `npx tsx scripts/seed_supabase.ts` from the repository root. `npm run seed` uses the locally installed, locked version of tsx.
 
-4. Set `DATA_SOURCE=supabase` and restart the app. Four sample recipients become available: Dad, Mum, Ordonez A, and Ordonez B. A database error is reported as an error; it never silently substitutes the bundled dataset.
+4. Set `DATA_SOURCE=database` and restart the app. Four sample recipients become available: Dad, Mum, Ordonez A, and Ordonez B. A database error is reported as an error; it never silently substitutes the bundled dataset.
 
 The seed dry run produces **1,202 events, 37 baselines, and 39 compact narratives**. It reports three invalid Ordonez A rows (72, 81, 83: reversed timestamps). Raw data is preserved byte-for-byte. Baselines use sample standard deviation, zero-count calendar days, and the first 65% of each Ordonez recording span. Synthetic baselines use a separate 14-day training period. UTC is the explicit timestamp convention for these sample imports.
 
@@ -102,7 +100,7 @@ See Google's [embedding guidance](https://ai.google.dev/gemini-api/docs/embeddin
 1. Import this repository into Vercel.
 2. Set **Root Directory: `frontend`**, framework **Next.js**, Node.js **22.x**. Keep the normal `npm run build` and `.next` output settings.
 3. For a no-key demo, set `DATA_SOURCE=demo`, `DEMO_MODE=true` (these are also the defaults).
-4. For Supabase operation, set the environment variables above in Vercel, apply the schema, and seed **before** enabling `DATA_SOURCE=supabase`. `.env` is intentionally not committed or uploaded.
+4. For database operation, set `DATABASE_URL`, apply the schema, and seed **before** enabling `DATA_SOURCE=database`. `.env` is intentionally not committed or uploaded.
 5. Deploy. No backend URL, background worker, scheduled task, Python runtime, or persistent filesystem is used.
 
 The two API handlers are Node.js serverless functions. [`frontend/vercel.json`](frontend/vercel.json) sets chat duration to 60 seconds. Check [Vercel's current function limits](https://vercel.com/docs/functions/limitations). Hobby eligibility is subject to [Vercel's personal/non-commercial usage rules](https://vercel.com/docs/plans/hobby); a commercial product launch may require a different plan. Bundled UCI data also has a non-commercial restriction in [`data/raw/README.txt`](data/raw/README.txt).
@@ -111,7 +109,7 @@ The two API handlers are Node.js serverless functions. [`frontend/vercel.json`](
 
 `DEMO_MODE=true` exposes only the four known public sample IDs, and only when the Supabase recipient has `is_demo=true`. Never add personal health records to those sample profiles. Tables and RPCs are inaccessible to browser/anonymous database keys.
 
-With `DEMO_MODE=false`, the API requires a Supabase Auth bearer token and checks `recipient_access` before any recipient query. The preserved reference interface has no login screen; a private deployment requires adding your authentication UI/session integration and passing its bearer token. This repository's ready-to-run interface is the public sample experience, not a complete authenticated clinical product.
+With `DEMO_MODE=false`, the API refuses access until an application authentication layer is added. The preserved reference interface has no login screen; this repository's ready-to-run interface is the public sample experience, not a complete authenticated clinical product.
 
 ## Verify
 

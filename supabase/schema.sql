@@ -32,26 +32,11 @@ create table if not exists public.activity_embeddings (
 );
 create index if not exists activity_embeddings_cosine on public.activity_embeddings using hnsw (embedding vector_cosine_ops);
 create index if not exists activity_embeddings_recipient on public.activity_embeddings(recipient_id);
-create table if not exists public.recipient_access (
-  user_id uuid references auth.users(id) on delete cascade,
-  recipient_id text references public.recipients(id) on delete cascade,
-  primary key(user_id, recipient_id)
-);
 -- Two fixed rows per provider: bounded storage and independent atomic limits.
 create table if not exists public.api_budgets (
   name text primary key, window_start timestamptz not null, used int not null default 0
 );
 insert into public.api_budgets values ('minute', now(), 0), ('day', now(), 0), ('groq-minute', now(), 0), ('groq-day', now(), 0) on conflict do nothing;
-
-alter table public.recipients enable row level security;
-alter table public.events enable row level security;
-alter table public.baselines enable row level security;
-alter table public.activity_embeddings enable row level security;
-alter table public.recipient_access enable row level security;
-alter table public.api_budgets enable row level security;
--- Browser keys have no direct data access. Route handlers authorize before service-role queries.
-revoke all on public.recipients, public.events, public.baselines, public.activity_embeddings, public.recipient_access, public.api_budgets from anon, authenticated;
-grant all on public.recipients, public.events, public.baselines, public.activity_embeddings, public.recipient_access, public.api_budgets to service_role;
 
 create or replace function public.match_activity_embeddings(
   query_embedding vector(1536), match_threshold float, match_count int, filter_recipient_id text
@@ -63,9 +48,6 @@ as $$
   where ae.recipient_id = filter_recipient_id and 1 - (ae.embedding <=> query_embedding) > match_threshold
   order by ae.embedding <=> query_embedding limit least(greatest(match_count, 0), 6);
 $$;
-revoke all on function public.match_activity_embeddings(vector, float, int, text) from public, anon, authenticated;
-grant execute on function public.match_activity_embeddings(vector, float, int, text) to service_role;
-
 create or replace function public.reserve_provider_budget(provider_name text, minute_limit int, day_limit int)
 returns boolean language plpgsql security invoker set search_path = public as $$
 declare m public.api_budgets; d public.api_budgets; minute_name text; day_name text;
@@ -84,13 +66,9 @@ begin
   update public.api_budgets set used = d.used + 1, window_start = date_trunc('day', now() at time zone 'UTC') at time zone 'UTC' where name = day_name;
   return true;
 end $$;
-revoke all on function public.reserve_provider_budget(text, int, int) from public, anon, authenticated;
-grant execute on function public.reserve_provider_budget(text, int, int) to service_role;
 -- Compatibility wrapper for the original seed command and existing Gemini deployments.
 create or replace function public.reserve_gemini_budget(minute_limit int, day_limit int)
 returns boolean language sql security invoker set search_path = public as $$
   select public.reserve_provider_budget('gemini', minute_limit, day_limit);
 $$;
-revoke all on function public.reserve_gemini_budget(int, int) from public, anon, authenticated;
-grant execute on function public.reserve_gemini_budget(int, int) to service_role;
 commit;

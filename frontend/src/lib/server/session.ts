@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Intent } from "./domain";
-const secret = () => process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "bundled-synthetic-demo-only-context-v1";
+const secret = () => process.env.SESSION_SECRET || "bundled-synthetic-demo-only-context-v1";
 const signature = (value: string) => createHmac("sha256", secret()).update(value).digest("base64url");
 export function signContext(recipient: string, intent: Intent) {
   const payload = Buffer.from(JSON.stringify({ recipient, intent, expires: Date.now() + 3_600_000 })).toString("base64url");
