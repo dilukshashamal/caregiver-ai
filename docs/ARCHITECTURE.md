@@ -4,7 +4,9 @@
 flowchart LR
   UI[Preserved React UI] --> API[Next.js Route Handlers]
   API --> Auth[Recipient authorization and safety]
-  Auth --> R[Scoped repository]
+  Auth --> M[Verify recipient-scoped conversation memory]
+  M --> P[Resolve question and bounded optional model planner]
+  P --> R[Scoped repository]
   R --> DB[(Supabase PostgreSQL + pgvector)]
   R --> Demo[Bundled synthetic sample]
   R --> A[Deterministic analytics and evidence]
@@ -15,7 +17,7 @@ flowchart LR
   SSE --> UI
 ```
 
-`src/lib/server/` holds analytics, sample generation, ingestion, retrieval, safety, intent parsing, Gemini transport, signed context, and orchestration. `src/lib/supabase.ts` is server-only and lazily constructs stateless clients. Build-time rendering never requires credentials.
+`src/lib/server/` holds analytics, sample generation, ingestion, retrieval, safety, question planning, Gemini/Groq transport, signed context, and orchestration. `src/lib/db.ts` lazily constructs a small direct PostgreSQL pool using `DATABASE_URL`. Build-time rendering never requires credentials.
 
 ## API contract
 
@@ -36,7 +38,9 @@ Baseline records use deterministic IDs including the training window; seeding ig
 
 The provider budget is an atomic database transaction with fixed minute/day rows per provider; no Redis or in-memory rate counter. Each embedding and generation reserves a call. Supabase is required for live cloud usage so limits persist across serverless instances. Seeding honors Gemini's budget. Groq generation has independent counters and does not require Gemini credentials. `LLMProvider` exposes `provider_name`, `model_name`, and `streamClaimIds`; the orchestrator selects implementations using `LLM_PROVIDER` and an explicit optional `LLM_FALLBACK_PROVIDER`.
 
-The signed follow-up token contains recipient, activity/time intent and a one-hour expiry. It contains no transcript and does not grant recipient access. Production sessions derive their signing key from `SESSION_SECRET`. The public bundled demo has a non-secret fallback signing key and remains restricted to fixed synthetic profiles.
+The signed follow-up token contains recipient, resolved intent, the last three bounded question/answer excerpts, and a one-hour expiry. It is signed, not encrypted, and does not grant recipient access. Set a stable random `SESSION_SECRET` on every deployment; absent that, database mode uses the private connection string as signing material and bundled mode uses an ephemeral random key. Rotating either key invalidates prior tokens. Tokens are checked for size, expiry, tampering and recipient binding. This is short-term conversational memory, not durable cross-device history.
+
+The workflow is safety → memory → intent planning → scoped retrieval → deterministic comparisons → model fact selection → validation → streaming → memory update. Explicit daily overviews reset inherited activity filters. Referential questions reuse their earlier time and activity scope. Ambiguous questions can invoke a five-second JSON planner, restricted to allowed activities and periods; the planner cannot choose recipient IDs or SQL. Overview retrieval combines daily routines with a separate matched recent behavioral window. Explanations distinguish the observed comparison from an unknown cause. Safety redirects preserve the last valid evidence context.
 
 Provider failure returns exact deterministic claims. Database failure returns an error. Inputs, queries, evidence packaging, output tokens, provider timeouts, and the total request duration are bounded. Network cancellation propagates from the browser to upstream requests.
 

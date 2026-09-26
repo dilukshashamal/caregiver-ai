@@ -71,4 +71,15 @@ create or replace function public.reserve_gemini_budget(minute_limit int, day_li
 returns boolean language sql security invoker set search_path = public as $$
   select public.reserve_provider_budget('gemini', minute_limit, day_limit);
 $$;
+-- Direct PostgreSQL runs as the configured server role. Browser Data API roles
+-- must not gain access through Supabase's default grants on the public schema.
+alter table public.recipients enable row level security;
+alter table public.events enable row level security;
+alter table public.baselines enable row level security;
+alter table public.activity_embeddings enable row level security;
+alter table public.api_budgets enable row level security;
+revoke all on public.recipients, public.events, public.baselines, public.activity_embeddings, public.api_budgets from anon, authenticated;
+revoke execute on function public.match_activity_embeddings(vector, float, int, text) from public, anon, authenticated;
+revoke execute on function public.reserve_provider_budget(text, int, int) from public, anon, authenticated;
+revoke execute on function public.reserve_gemini_budget(int, int) from public, anon, authenticated;
 commit;

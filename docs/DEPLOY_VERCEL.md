@@ -16,7 +16,7 @@ Remote: `https://github.com/dilukshashamal/caregiver-ai.git`.
 
 ## 2. Prepare Supabase once
 
-1. In your Supabase project, open **SQL Editor** and run the full `supabase/schema.sql`. If you ran an earlier copy, rerun the updated file to add Groq's independent budget function/rows; existing data and Gemini counters are preserved.
+1. Fill `DATABASE_URL` and run `npm run db:init` inside `frontend` to initialize through the direct connection. Alternatively run `supabase/schema.sql` in Supabase SQL Editor. Rerunning adds the latest budget/access protections without deleting records.
 2. Fill the ignored local `frontend/.env` with the direct `DATABASE_URL` connection string.
 3. Seed from your computer, not during the Vercel build:
 
@@ -57,13 +57,13 @@ DATA_SOURCE=database
 DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.qvnmtgtqtktuqrmmhqtq.supabase.co:5432/postgres
 LLM_PROVIDER=groq
 GROQ_API_KEY=<real Groq key>
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-20b
 GROQ_REQUESTS_PER_MINUTE=4
 GROQ_REQUESTS_PER_DAY=50
 LLM_FALLBACK_PROVIDER=none
 ```
 
-`GROQ_MODEL` retains the reference repository's default. It is documented in [Groq's model catalog](https://console.groq.com/docs/model/llama-3.3-70b-versatile). Availability and quotas depend on your account.
+`GROQ_MODEL` defaults to [GPT-OSS 20B on Groq](https://console.groq.com/docs/model/openai/gpt-oss-20b). The earlier Llama setting returned 404 for the configured account; use a model listed by your account's `/openai/v1/models` endpoint. The existing provider selection and fallback settings are preserved.
 
 Optional **Gemini embeddings and/or Gemini chat**:
 
@@ -79,7 +79,7 @@ GEMINI_REQUESTS_PER_DAY=50
 - To use Groq if Gemini is unavailable, set `LLM_PROVIDER=gemini`, `LLM_FALLBACK_PROVIDER=groq`, and both keys.
 - The reverse is supported too. Secondary-provider calls happen only when explicitly configured and within that provider's separate budget. There are no automatic repeated retries.
 - Both providers use the same evidence validation and streaming contract. No additional SDK is needed.
-- `SESSION_SECRET` is optional; use a random value of at least 32 characters for signed follow-up context.
+- Set `SESSION_SECRET` to a stable random value of at least 32 characters for signed conversation memory. Use the same value across instances; changing it resets existing conversations. Memory contains up to three recent excerpts and expires after one hour.
 - Percent-encode special characters in the `DATABASE_URL` password. Keep the connection string server-only.
 
 For a **no-key preview only**, use `DATA_SOURCE=demo` and `DEMO_MODE=true`. This shows the bundled synthetic profiles and deterministic answers, with no external LLM calls. Select `DATA_SOURCE=database` to enable budgeted cloud generation.
@@ -96,4 +96,4 @@ Click **Deploy**. Then:
 
 There is no build-time seeding, external FastAPI URL, Redis, or local database. `frontend/vercel.json` configures the chat function for up to 60 seconds; the application imposes a shorter overall deadline.
 
-The existing UI is a public sample experience. Keep `DEMO_MODE=true` only for the known sample profiles. Private records require the authenticated API mode and a separate sign-in UI integration described in the README. Vercel Hobby's [usage rules](https://vercel.com/docs/plans/hobby) and the bundled UCI dataset's non-commercial terms still apply.
+The existing UI is a public sample experience. Keep `DEMO_MODE=true` only for known sample profiles. Private mode currently fails closed: authentication and a sign-in UI must be implemented before using real family records. Vercel Hobby's [usage rules](https://vercel.com/docs/plans/hobby) and the bundled UCI dataset's non-commercial terms still apply.

@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "eslint src scripts tests --max-warnings=0",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
+    "db:init": "tsx scripts/init-db.ts",
+    "check:chat": "node --conditions=react-server --import tsx scripts/check-chat.ts",
     "seed": "tsx ../scripts/seed_supabase.ts",
     "seed:dry": "tsx ../scripts/seed_supabase.ts --dry-run"
   },

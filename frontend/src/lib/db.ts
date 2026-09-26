@@ -20,6 +20,7 @@ function getPool() {
     query_timeout: 8_000,
     keepAlive: true,
     application_name: "gennaai-caregiver",
+    options: "-c search_path=public,extensions",
   });
   globalScope.__gennaai_pool__ = pool;
   return pool;

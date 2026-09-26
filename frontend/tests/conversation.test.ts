@@ -1,0 +1,83 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { processChat } from "../src/lib/server/chat";
+import { resolveIntent } from "../src/lib/server/intent";
+import { readMemory, signContext, MAX_CONTEXT_LENGTH } from "../src/lib/server/session";
+import { validateQuestionPlan } from "../src/lib/server/planner";
+import { sampleDataset } from "../src/lib/server/sample";
+import type { GroundedAnswer } from "../src/lib/types";
+
+process.env.DATA_SOURCE = "demo";
+process.env.DEMO_MODE = "true";
+const anchor = "2026-09-21T18:22:00.000Z";
+async function ask(message: string, conversation_id?: string, recipientIndex = 0) {
+  const recipient = sampleDataset().recipients[recipientIndex];
+  let answer: GroundedAnswer | undefined;
+  let streamed = "";
+  await processChat({ recipient_id: recipient.id, message, conversation_id }, recipient, (event, payload) => {
+    if (event === "done") answer = payload as GroundedAnswer;
+    if (event === "delta") streamed += (payload as { text: string }).text;
+  }, AbortSignal.timeout(10000));
+  assert.ok(answer);
+  assert.equal(streamed, answer.answer);
+  for (const claim of answer.claims) for (const id of claim.evidence_ids) assert.ok(answer.evidence.some(e => e.evidence_id === id));
+  return answer;
+}
+
+test("reported sleep → daily overview → misspelled reason → behaviour follow-up sequence", async () => {
+  const sleep = await ask("How long did they sleep last night?");
+  assert.match(sleep.answer, /7 hours \(420 minutes\)/);
+  const overview = await ask("Explain Dad's current day-to-day life, is it normal, or any unbehaviour things?", sleep.conversation_id);
+  assert.match(overview.answer, /3\.1×/);
+  assert.match(overview.answer, /breakfast/);
+  assert.match(overview.answer, /toileting/);
+  assert.match(overview.answer, /personal baseline/);
+  assert.notEqual(overview.answer, sleep.answer);
+  const why = await ask("what the resaon?", overview.conversation_id);
+  assert.match(why.answer, /do not establish a cause/);
+  assert.match(why.answer, /3\.1×/);
+  assert.ok(!why.safety_flags.includes("OUT_OF_SCOPE_REDIRECT"));
+  const follow = await ask("what the reason about above behaviour?", why.conversation_id);
+  assert.match(follow.answer, /routine or surroundings/);
+  const memory = readMemory(follow.conversation_id, "dad-demo")!;
+  assert.equal(memory.turns.length, 3);
+  assert.equal(memory.turns.at(-1)?.question, "what the reason about above behaviour?");
+  assert.equal(memory.intent.activities.length, 0);
+});
+
+test("follow-ups preserve scope, new activities replace it, safety redirects preserve memory", async () => {
+  const sleep = await ask("How long did they sleep last night?");
+  const normal = await ask("Was that normal?", sleep.conversation_id);
+  assert.match(normal.answer, /baseline/);
+  assert.equal(readMemory(normal.conversation_id, "dad-demo")?.intent.start, "2026-09-20T22:00:00.000Z");
+  const redirected = await ask("What medication dosage should I give?", normal.conversation_id);
+  assert.equal(redirected.conversation_id, normal.conversation_id);
+  const why = await ask("why?", redirected.conversation_id);
+  assert.match(why.answer, /reason for the sleeping/);
+  const meal = resolveIntent("What did he eat today?", anchor, readMemory(why.conversation_id, "dad-demo")?.intent);
+  assert.deepEqual(meal.activities, ["Breakfast", "Lunch", "Dinner", "Snack"]);
+  const other = await ask("why?", sleep.conversation_id, 1);
+  assert.ok(other.safety_flags.includes("CONTEXT_REQUIRED"));
+  assert.equal(other.evidence.length, 0);
+});
+
+test("memory rejects tampering, expiry, and cross-recipient reuse; bounded for unicode", () => {
+  const intent = resolveIntent("sleep last night", anchor);
+  const token = signContext("dad-demo", intent, Array.from({ length: 20 }, () => ({ question: "🌙".repeat(400), answer: "🌙".repeat(1000) })));
+  assert.ok(token.length <= MAX_CONTEXT_LENGTH);
+  assert.ok(readMemory(token, "dad-demo"));
+  assert.equal(readMemory(token + ".extra", "dad-demo"), undefined);
+  assert.equal(readMemory(token, "mum-demo"), undefined);
+  const now = Date.now;
+  try { Date.now = () => now() + 3_600_001; assert.equal(readMemory(token, "dad-demo"), undefined); }
+  finally { Date.now = now; }
+});
+
+test("model planning cannot invent activities, recipient scope, or unsupported tools", () => {
+  const fallback = resolveIntent("daily overview", anchor);
+  const plan = { task: "overview", activities: [], period: "day", comparison: true };
+  assert.equal(validateQuestionPlan(JSON.stringify(plan), fallback).task, "overview");
+  for (const invalid of [{ ...plan, activities: ["Diagnosis"] }, { ...plan, recipient_id: "other" }, { ...plan, sql: "drop table events" }, { ...plan, period: "inherit" }]) {
+    assert.throws(() => validateQuestionPlan(JSON.stringify(invalid), fallback));
+  }
+});

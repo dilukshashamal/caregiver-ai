@@ -33,7 +33,7 @@ test("route streams incremental text, complete evidence, and signed follow-up co
 test("routes reject malformed, oversized and unauthorized requests before retrieval", async () => {
   assert.equal((await POST(request({ recipient_id: "not-mine", message: "sleep" }))).status, 403);
   assert.equal((await POST(request({ recipient_id: "dad-demo", message: "a".repeat(1001) }))).status, 400);
-  assert.equal((await POST(request({ recipient_id: "dad-demo", message: "a".repeat(9000) }))).status, 413);
+  assert.equal((await POST(request({ recipient_id: "dad-demo", message: "a".repeat(17000) }))).status, 413);
   assert.equal((await POST(request({ recipient_id: "dad-demo", care_recipient_id: "mum-demo", message: "sleep" }))).status, 400);
   assert.equal((await POST(new Request("http://localhost/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: "bad" }))).status, 400);
 });

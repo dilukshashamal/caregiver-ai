@@ -55,8 +55,9 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
       const change = comparison.ratio === null ? "a ratio cannot be calculated from a zero baseline" : `${comparison.ratio}× the typical evening level`;
       add(`Over the last 22 recorded minutes, ${label(activity)} ${isCount ? "totaled" : "was"} ${value} ${unit}, compared with ${baselineValue} ${unit} in the matched baseline window (${change}).`, selected, baseline);
     } else {
-      let text = `${selected.length} ${label(activity)} event${selected.length === 1 ? " was" : "s were"} recorded, totaling ${total} minutes within the requested interval.`;
-      if (intent.comparison && baseline) text += ` Mean whole-event duration was ${round(mean(selected.map(e => e.duration_minutes)))} minutes versus a baseline of ${baseline.mean_duration} minutes per event.`;
+      const duration = total >= 60 ? `${Math.floor(total / 60)} hours${total % 60 ? ` ${round(total % 60)} minutes` : ""} (${total} minutes)` : `${total} minutes`;
+      let text = `${selected.length} ${label(activity)} event${selected.length === 1 ? " was" : "s were"} recorded, totaling ${duration} within the requested interval.`;
+      if (intent.comparison && baseline && !baseline.metadata.comparison_window) text += ` Mean whole-event duration was ${round(mean(selected.map(e => e.duration_minutes)))} minutes versus a baseline of ${baseline.mean_duration} minutes per event. This comparison alone cannot establish whether the routine is normal or healthy.`;
       if (intent.comparison && baseline && intent.start.endsWith("T00:00:00.000Z") && intent.end.endsWith("T00:00:00.000Z")) {
         const days = (Date.parse(intent.end) - Date.parse(intent.start)) / DAY;
         const frequency = selected.filter(e => e.start_time >= intent.start).length / days;
@@ -90,6 +91,30 @@ export function buildAnswerPlan(recipient: Recipient, intent: Intent, events: Ac
   }
   if (intent.comparison && !baselines.length) limitations.push("No earlier baseline is available for this interval; a comparison cannot be established.");
   return { intro: `${recipient.metadata.synthetic ? "Synthetic demonstration. " : ""}${intent.behavioral ? "I can’t determine their emotional state, but I can show you what has changed in the recorded behavior." : "Here is what the recorded activities show."}`, claims: claims.slice(0, 8), evidence: [...evidence.values()].sort((a, b) => a.started_at.localeCompare(b.started_at)), limitations, coverage, abstained: false };
+}
+
+// A daily overview needs two retrieval views: routine activity and a matched recent
+// behavioral window. A day-long total must never be compared to a 22-minute baseline.
+export function buildConversationPlan(recipient: Recipient, intent: Intent, events: ActivityEvent[], baselines: Baseline[], history: ActivityEvent[], preferredIds: string[] = []): AnswerPlan {
+  const broad = intent.task === "overview" || (intent.task === "explanation" && !intent.activities.length);
+  let plan = buildAnswerPlan(recipient, intent, events, baselines, history, preferredIds);
+  if (broad && events.length) {
+    const behavioralActivities = ["Pacing", "Room_transitions", "Vocal_activity", "Environmental_observation"];
+    const routines = events.filter(e => !behavioralActivities.includes(e.activity));
+    const routinePlan = buildAnswerPlan(recipient, { ...intent, behavioral: false }, routines, baselines, history);
+    const recentIntent = { ...intent, start: new Date(Date.parse(intent.end) - 22 * MINUTE).toISOString(), behavioral: true, activities: behavioralActivities };
+    const recentPlan = buildAnswerPlan(recipient, recentIntent, events, baselines, history, preferredIds);
+    const claims = [...recentPlan.claims, ...routinePlan.claims].slice(0, 12);
+    plan = { ...plan, intro: `${recipient.metadata.synthetic ? "Synthetic demonstration. " : ""}Here is the recorded daily routine and the recent behavioral context. “Normal” needs a personal baseline and reliable coverage; these records alone cannot establish overall wellbeing.`, claims,
+      evidence: [...new Map([...recentPlan.evidence, ...routinePlan.evidence].map(e => [e.evidence_id, e])).values()],
+      limitations: [...new Set([...plan.limitations, ...routinePlan.limitations, ...recentPlan.limitations])] };
+  }
+  if (intent.task === "explanation") {
+    const topic = intent.activities.length === 1 ? label(intent.activities[0]) : "behavior and routine";
+    plan.intro = `${recipient.metadata.synthetic ? "Synthetic demonstration. " : ""}You’re asking about the reason for the ${topic} observations. The recordings show what happened, but do not establish a cause. The comparisons below describe those observations; they do not prove an emotional state or diagnosis. What was happening immediately beforehand, and was there a change in routine or surroundings? That context could help investigate the pattern.`;
+    plan.limitations.push("To investigate context, record what was happening around the same time and discuss persistent or concerning changes with the care team. A possible explanation should not be treated as an observed cause.");
+  }
+  return plan;
 }
 export function answerFromPlan(plan: AnswerPlan): GroundedAnswer {
   return { answer: [plan.intro, ...plan.claims.map(c => c.claim_text)].join("\n\n"), claims: plan.claims, evidence: plan.evidence, limitations: plan.limitations, data_coverage_summary: plan.coverage, abstained: plan.abstained, safety_flags: [] };

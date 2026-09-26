@@ -60,7 +60,7 @@ export async function getBaselines(recipient: string, before: string, signal: Ab
   if (!usesDatabase()) return sampleDataset().baselines.filter(b => b.recipient_id === recipient && b.window_end < before);
   try {
     const rows = await query<Baseline>(`select id, recipient_id, activity, mean_duration, std_duration, mean_frequency, window_days, window_start, window_end, sample_count, metadata from public.baselines where recipient_id = $1 and window_end < $2 order by window_end desc limit 100`, [recipient, before], signal);
-    return rows.filter((b, i, all) => all.findIndex(x => x.activity === b.activity) === i).map(b => ({ ...b, mean_duration: Number(b.mean_duration), mean_frequency: Number(b.mean_frequency), std_duration: b.std_duration === null ? null : Number(b.std_duration) }));
+    return rows.filter((b, i, all) => all.findIndex(x => x.activity === b.activity) === i).map(b => ({ ...b, window_start: new Date(b.window_start).toISOString(), window_end: new Date(b.window_end).toISOString(), mean_duration: Number(b.mean_duration), mean_frequency: Number(b.mean_frequency), std_duration: b.std_duration === null ? null : Number(b.std_duration) }));
   } catch {
     throw new HttpError(503, "Baseline information is temporarily unavailable.");
   }

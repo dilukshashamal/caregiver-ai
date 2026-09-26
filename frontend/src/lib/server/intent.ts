@@ -1,12 +1,53 @@
 import { DAY, Intent, MINUTE } from "./domain";
 
+export const isExplanation = (text: string) => /\b(?:why|reason|resaon|cause|explain (?:that|this|the above)|what (?:led to|caused))\b/i.test(text);
+export const isFollowUp = (text: string) => isExplanation(text) || /\b(?:that|above|previous answer|tell me more|more detail|compare|timeline|evidence)\b/i.test(text);
+
 export function resolveIntent(message: string, anchor: string, previous?: Intent): Intent {
   const text = message.toLowerCase();
-  const behavioral = /agitat|pacing|escalat|vocal|room|episode|crisis/.test(text) || (!!previous?.behavioral && /that|previous|timeline|evidence|compare/.test(text));
-  const activities = behavioral ? ["Pacing", "Room_transitions", "Vocal_activity", "Environmental_observation"] :
-    /sleep|rest/.test(text) ? ["Sleeping"] : /meal|eat|breakfast|lunch|dinner/.test(text) ? ["Breakfast", "Lunch", "Dinner", "Snack"] :
-      /toilet|bathroom/.test(text) ? ["Toileting"] : /shower/.test(text) ? ["Showering"] : /morning|groom/.test(text) ? ["Grooming", "Breakfast", "Showering"] : /that|usual|normal|pattern|compare|timeline|evidence/.test(text) ? previous?.activities || [] : [];
-  let end = Date.parse(anchor), start = end - (behavioral ? 22 * MINUTE : DAY);
+  const overview = /\b(?:day.to.day|daily life|daily routine|overall|overview|whole day|routine summary)\b/i.test(text);
+  const isToileting = /\b(?:toilet\w*|bathroom\w*|restroom\w*|pee\w*|poop\w*|urinat\w*)\b/i.test(text);
+  const isSleeping = /\b(?:sleep\w*|slept|rest|resting|nap\w*|bedtime|waking)\b/i.test(text);
+  const isMeal = /\b(?:meal\w*|eat\w*|breakfast\w*|lunch\w*|dinner\w*|snack\w*|food)\b/i.test(text);
+  const isShowering = /\b(?:shower\w*|bath\b|bathing|hygiene)\b/i.test(text);
+  const isGrooming = /\b(?:morning|groom\w*)\b/i.test(text);
+  const isPacing = /\b(?:pacing|wander\w*|walking)\b/i.test(text);
+  const isSituationOrAnomaly = /\b(?:situation|status|how (?:is|are) (?:the situation|things|everything|he|she|dad|mum|mom)|any(?:thing)? (?:special|unusual|abnormal|different|wrong|concerning|out of the ordinary)|notice(?: anything)?|special thing|is (?:it|everything|he|she|dad|mum|mom) normal)\b/i.test(text);
+  const isNowOrRecent = /\b(?:now|right now|currently|at the moment|latest|recent)\b/i.test(text);
+  const explicitActivity = isToileting || isSleeping || isMeal || isShowering || isGrooming || isPacing;
+  const explicitTime = /\b(?:today|yesterday|last night|last|past|week|now|currently|\d{4}-\d{2}-\d{2})\b/i.test(text);
+  if (previous && !overview && !explicitActivity && !explicitTime && isFollowUp(text)) {
+    return { ...previous, task: isExplanation(text) ? "explanation" : previous.task, comparison: previous.comparison || /normal|usual|compar/.test(text) };
+  }
+
+  const behavioral = !overview && ((!isToileting && !isSleeping && !isMeal && !isShowering && !isGrooming &&
+    (/\b(?:agitat\w*|escalat\w*|vocal\w*|room[ _-]?transitions?|crisis|episode\w*|restless\w*|distress\w*)\b/i.test(text) ||
+     (isSituationOrAnomaly && (isNowOrRecent || !/\b(?:yesterday|last night|week|month|days?)\b/i.test(text))))) ||
+    (isPacing && !isToileting && !isSleeping && !isMeal) ||
+    (!!previous?.behavioral && !explicitActivity && isFollowUp(text)));
+
+  let activities: string[] = [];
+  if (overview) {
+    activities = [];
+  } else if (isToileting) {
+    activities = ["Toileting"];
+  } else if (isSleeping) {
+    activities = ["Sleeping"];
+  } else if (isMeal) {
+    activities = ["Breakfast", "Lunch", "Dinner", "Snack"];
+  } else if (isShowering) {
+    activities = ["Showering"];
+  } else if (isGrooming) {
+    activities = ["Grooming", "Breakfast", "Showering"];
+  } else if (behavioral) {
+    activities = ["Pacing", "Room_transitions", "Vocal_activity", "Environmental_observation"];
+  } else if (isPacing) {
+    activities = ["Pacing"];
+  } else if (isFollowUp(text) && previous?.activities?.length) {
+    activities = previous.activities;
+  }
+  let end = Date.parse(anchor);
+  let start = end - (behavioral ? 22 * MINUTE : (isNowOrRecent && !/\b(?:yesterday|last night|week|today)\b/i.test(text)) ? 60 * MINUTE : DAY);
   const midnight = Date.parse(new Date(end).toISOString().slice(0, 10));
   const explicit = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
   const lastMinutes = text.match(/(?:last|past)\s+(\d+)\s+minutes?/);
@@ -20,7 +61,8 @@ export function resolveIntent(message: string, anchor: string, previous?: Intent
   else if (lastMinutes) start = end - Math.min(1440, Math.max(1, Number(lastMinutes[1]))) * MINUTE;
   else if (lastDays || /week/.test(text)) start = end - Math.min(31, Math.max(1, Number(lastDays?.[1] || 7))) * DAY;
   else if (/today/.test(text)) start = midnight;
+  else if (isNowOrRecent && !behavioral && !overview) start = end - 60 * MINUTE;
   else if (previous && /^(was that|what about|compare|view|show (?:the )?(?:evidence|timeline)|is that)/.test(text)) { start = Date.parse(previous.start); end = Date.parse(previous.end); }
   if (!Number.isFinite(start) || !Number.isFinite(end)) throw new Error("Invalid time interval");
-  return { activities, start: new Date(start).toISOString(), end: new Date(end).toISOString(), behavioral, comparison: behavioral || /usual|normal|compar|different|chang|baseline/.test(text), pattern: /pattern|week|consecutive|repeat/.test(text), coverage: /coverage|gap|missing|sensor/.test(text) };
+  return { task: overview ? "overview" : isExplanation(text) ? "explanation" : "activity", activities, start: new Date(start).toISOString(), end: new Date(end).toISOString(), behavioral, comparison: overview || behavioral || /usual|normal|compar|different|chang|baseline/.test(text), pattern: /pattern|week|consecutive|repeat/.test(text), coverage: /coverage|gap|missing|sensor/.test(text) };
 }

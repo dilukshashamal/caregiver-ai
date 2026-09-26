@@ -80,15 +80,15 @@ Pacing is **3.1×** baseline. September 16 and 19 contain similar sample episode
 
 ## Provider selection, cost and grounding controls
 
-The original `LLM_PROVIDER`, `GROQ_API_KEY`, and `GROQ_MODEL` settings are supported through a shared TypeScript `LLMProvider` interface. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` to use Groq; `GROQ_MODEL` defaults to the original `llama-3.3-70b-versatile`. Set `LLM_PROVIDER=gemini` to use Gemini. `LLM_FALLBACK_PROVIDER=groq` or `gemini` explicitly enables one secondary provider; it defaults to `none`. Both providers share the same grounding gate. Each has separate `*_REQUESTS_PER_MINUTE` and `*_REQUESTS_PER_DAY` limits.
+The original `LLM_PROVIDER`, `GROQ_API_KEY`, and `GROQ_MODEL` settings are supported through a shared TypeScript `LLMProvider` interface. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` to use Groq; `GROQ_MODEL` defaults to `openai/gpt-oss-20b`. The former Llama model was unavailable for the configured account. Set `LLM_PROVIDER=gemini` to use Gemini. `LLM_FALLBACK_PROVIDER=groq` or `gemini` explicitly enables one secondary provider; it defaults to `none`. Both providers share the same grounding gate. Each has separate `*_REQUESTS_PER_MINUTE` and `*_REQUESTS_PER_DAY` limits.
 
 Gemini remains the embedding provider. Groq-only operation needs no Gemini key and uses structured retrieval; supplying a Gemini key adds semantic narrative ranking. Rerun the updated schema if you applied it before Groq was added.
 
 - Default model: `gemini-2.5-flash-lite`; configurable through `GEMINI_MODEL`.
-- At most one 1536-dimensional query embedding and one streaming call per configured synthesis provider per question. A secondary provider is attempted only if explicitly configured and the primary is unavailable. Gemini embeddings are normalized before cosine search.
-- No raw audio, video, full event histories, or conversation transcripts are sent to either provider. Retrieval and all arithmetic run locally in TypeScript against scoped records.
+- Ambiguous questions can use one bounded planning call per configured provider; explicit questions use local intent resolution. Behavioral questions can use one query embedding. Each synthesis provider is attempted at most once. Secondary providers require explicit configuration, and every call reserves budget.
+- Providers receive the current question, up to three bounded recent question/answer excerpts, and compact evidence sentences. No raw audio, video or full event histories are sent. Retrieval and all arithmetic run locally against scoped records.
 - The model streams **IDs of approved evidence-backed sentences**, not unrestricted prose. Each ID is validated before its exact sentence is streamed into the chat. This intentionally favors factual accuracy over free-form wording.
-- Up to eight claims and 192 output tokens per synthesis call. Query text is limited to 1,000 characters.
+- Up to eight claims for a focused answer, or twelve for a daily overview. Groq GPT-OSS calls allow 1,024 completion tokens including low-effort reasoning; legacy non-reasoning Groq synthesis allows 192. Gemini synthesis allows 512. Reasoning is not shown to the user. Query text is limited to 1,000 characters.
 - Atomic Supabase counters default to **4 requests/minute and 50/day per provider**, shared across serverless instances. Gemini seeding and chat share its budget. These are conservative application budgets, not promises of provider quotas.
 - No key, exhausted budget, malformed provider output, provider error, or embedding failure leaves deterministic evidence-backed answers available. Built-in demo mode never calls a cloud provider, even if a key is present, because it has no persistent budget store.
 - Model streams have a 12-second timeout; embeddings have a 5-second timeout. The chat request has an overall 48-second deadline and a 60-second function configuration.
@@ -121,6 +121,6 @@ npm run seed:dry
 npm run build
 ```
 
-Tests cover calculations, ingestion, date windows, sample isolation, safety, exact citations, signed context, malformed requests, SSE chunk boundaries, streamed route completion, normalized embeddings, and mocked Supabase authorization. Live Supabase/Gemini verification requires your keys; no live cloud schema or deployment is created by local build/test commands.
+Tests cover calculations, ingestion, date windows, sample isolation, safety, exact citations, signed conversation memory, the sleep → overview → reason regression, restricted model planning, malformed requests, SSE chunk boundaries, streamed route completion, and normalized embeddings. Live PostgreSQL/Gemini/Groq verification is separate; no live cloud schema or deployment is created by local build/test commands.
 
 Details: [source audit](docs/SOURCE_AUDIT.md), [architecture](docs/ARCHITECTURE.md), [safety](docs/SAFETY.md), [verification](docs/TEST_PLAN.md).
