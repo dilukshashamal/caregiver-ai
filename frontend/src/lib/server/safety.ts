@@ -45,6 +45,16 @@ export function safetyResponse(text: string, hasPreviousContext = false): { mess
     };
   }
 
+  // Product questions are not requests for recipient evidence. Anchor the whole
+  // message so an introduction followed by an activity question is not swallowed.
+  const productQuestion = trimmed.replace(/[’]/g, "'").replace(/[?!.]+$/g, "").trim();
+  if (/^(?:(?:hi|hello|hey)[, ]+)?(?:what(?: is|'s) (?:naai|gennaai)|who (?:are you|is naai)|(?:please )?(?:explain|describe|introduce) (?:naai|gennaai|yourself)|(?:please )?tell me about (?:naai|gennaai|yourself)|what (?:can|do) (?:you|naai) (?:do|help (?:me )?with)|how (?:can|does) (?:you|naai|gennaai) help(?: me)?|what (?:is your (?:purpose|role)|are your (?:capabilities|limitations)))$/i.test(productQuestion)) {
+    return {
+      message: "NAAI is GENNAAI’s caregiving assistant. I help family caregivers understand a loved one’s recorded activities, compare them with their usual routine, and explore changes with supporting evidence. You can ask about sleep, meals, daily routines, or behavioral changes, and follow up on an answer. I can explain what the records show, but I cannot determine someone’s emotions, diagnose a condition, or provide emergency monitoring.",
+      flag: "CONVERSATIONAL_RESPONSE"
+    };
+  }
+
   // Social-only turns are intentionally local: no records or model quota required.
   if (/^(?:(?:ok|okay|alright|great|got it)[,! .]*)?(?:thanks(?: a lot)?|thank you(?: so much)?|thx|thankyou)[!. ]*$/i.test(trimmed) || /^(?:ok|okay|got it|understood|bye|goodbye)[!. ]*$/i.test(trimmed)) {
     return { message: /bye/i.test(trimmed) ? "Take care. I’m here when you need help." : "You’re welcome. I’m here if you need anything else.", flag: "CONVERSATIONAL_RESPONSE" };

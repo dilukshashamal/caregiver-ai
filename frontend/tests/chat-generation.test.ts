@@ -44,6 +44,18 @@ async function ask(message: string, conversation_id?: string) {
 }
 const output = (text: string) => JSON.stringify({ paragraphs: [{ text, fact_ids: [0] }] });
 
+test("assistant introduction needs neither database access nor a model request", async () => withDatabase(async () => {
+  const database = mock.method(Pool.prototype, "query", () => { throw new Error("Introduction must not query records"); });
+  const cloud = mock.method(global, "fetch", async () => { throw new Error("Introduction must not call a model"); });
+  try {
+    const answer = await ask("what is NAAI?");
+    assert.equal(answer.abstained, false);
+    assert.match(answer.answer, /NAAI is GENNAAI/);
+    assert.equal(database.mock.callCount(), 0);
+    assert.equal(cloud.mock.callCount(), 0);
+  } finally { database.mock.restore(); cloud.mock.restore(); }
+}));
+
 test("orchestrator returns model-written breakfast/calculation replies and skips cloud calls for thanks", async () => withDatabase(async () => {
   let calls = 0;
   global.fetch = async (_url, init) => {
